@@ -22,16 +22,24 @@ public class ShoppingCart {
         String product = scan(scanner);
 
         while(!product.equals("quit")) {
-            /* TODO:
-               - check if the amount of credits is enough, if not stop the execution.
-               - otherwise, withdraw the price of the product from the wallet.
-               - add the name of the product to the pocket file.
-               - print the new balance.
-            */
-
             // Just to print everything again...
             print(wallet, pocket);
             product = scan(scanner);
+
+            Integer price = Store.getProductPrice(product);
+
+            // check if the amount of credits is enough, if not stop the execution.
+            if (wallet.getBalance() - price < 0) {
+                System.out.println("You can not afford that product.");
+            }
+            else {
+                // otherwise
+                // withdraw the price of the product from the wallet.
+                wallet.setBalance(wallet.getBalance() - price);
+
+                // add the name of the product to the pocket file.
+                pocket.addProduct(product);
+            }
         }
     }
 }
