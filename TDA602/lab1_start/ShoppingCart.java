@@ -31,9 +31,9 @@ public class ShoppingCart {
             // check if the amount of credits is enough, if not stop the execution.
             if (wallet.getBalance() - price < 0) {
                 System.out.println("You can not afford that product.");
+                break;
             }
             else {
-                // otherwise
                 // withdraw the price of the product from the wallet.
                 wallet.setBalance(wallet.getBalance() - price);
 
