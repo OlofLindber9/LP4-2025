@@ -38,21 +38,21 @@ public class ShoppingCart {
             Integer price = Store.getProductPrice(product);
 
             // check if the amount of credits is enough
-            Integer balance = wallet.getBalance();
-            if (balance - price < 0) {
+            // Integer balance = wallet.getBalance();
+            boolean withdrawal = wallet.safeWithdraw(price);
+            if (!withdrawal) {
                 // If not stop the execution.
                 System.out.println("You can not afford that product.");
                 break;
             }
             else {
-                wait(5000);
                 // withdraw the price of the product from the wallet.
-                wallet.setBalance(balance - price);
+                // wallet.setBalance(balance - price);
 
                 // add the name of the product to the pocket file.
                 pocket.addProduct(product);
             }
-            
+
             // Just to print everything again...
             print(wallet, pocket);
             product = scan(scanner);
