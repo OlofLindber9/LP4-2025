@@ -13,6 +13,18 @@ public class ShoppingCart {
         return scanner.nextLine();
     }
 
+    private static void wait(int ms)
+    {
+        try
+        {
+            Thread.sleep(ms);
+        }
+        catch(InterruptedException ex)
+        {
+            Thread.currentThread().interrupt();
+        }
+    }
+
     public static void main(String[] args) throws Exception {
         Wallet wallet = new Wallet();
         Pocket pocket = new Pocket();
@@ -28,12 +40,14 @@ public class ShoppingCart {
 
             Integer price = Store.getProductPrice(product);
 
-            // check if the amount of credits is enough, if not stop the execution.
+            // check if the amount of credits is enough
             if (wallet.getBalance() - price < 0) {
+                // If not stop the execution.
                 System.out.println("You can not afford that product.");
                 break;
             }
             else {
+                wait(5000);
                 // withdraw the price of the product from the wallet.
                 wallet.setBalance(wallet.getBalance() - price);
 

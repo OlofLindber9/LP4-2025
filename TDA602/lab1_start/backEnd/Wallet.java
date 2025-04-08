@@ -8,6 +8,7 @@ public class Wallet {
      * The RandomAccessFile of the wallet file
      */  
     private RandomAccessFile file;
+    private boolean balanceLock;
 
     /**
      * Creates a Wallet object
@@ -16,6 +17,7 @@ public class Wallet {
      */
     public Wallet () throws Exception {
 	this.file = new RandomAccessFile(new File("backEnd/wallet.txt"), "rw");
+    this.balanceLock = false;
     }
 
     /**
@@ -44,5 +46,10 @@ public class Wallet {
      */
     public void close() throws Exception {
 	this.file.close();
+    }
+
+    public boolean safeWithdraw(int valueToWithdraw) throws Exception {
+        // lock balance
+        return this.getBalance() > valueToWithdraw;
     }
 }
