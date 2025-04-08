@@ -13,6 +13,13 @@ public class ShoppingCart {
         return scanner.nextLine();
     }
 
+    private static void wait(int ms) {
+        try {
+            Thread.sleep(ms);
+        } catch (Exception e) {
+        }
+    }
+
     public static void main(String[] args) throws Exception {
         Wallet wallet = new Wallet();
         Pocket pocket = new Pocket();
@@ -30,11 +37,10 @@ public class ShoppingCart {
             */
             
             int price = Store.getProductPrice(product);
-
-            if(price > wallet.getBalance()){
-                throw new Exception("Not enough money!");
+            if(!wallet.safeWithdraw(price)){
+                System.out.println("medjes ej");
             } else{
-                wallet.setBalance(wallet.getBalance() - price);
+                wait(5000);
                 pocket.addProduct(product);
             }
             // Just to print everything again...
