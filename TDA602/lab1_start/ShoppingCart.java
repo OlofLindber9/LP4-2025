@@ -34,14 +34,12 @@ public class ShoppingCart {
         String product = scan(scanner);
 
         while(!product.equals("quit")) {
-            // Just to print everything again...
-            print(wallet, pocket);
-            product = scan(scanner);
 
             Integer price = Store.getProductPrice(product);
 
             // check if the amount of credits is enough
-            if (wallet.getBalance() - price < 0) {
+            Integer balance = wallet.getBalance();
+            if (balance - price < 0) {
                 // If not stop the execution.
                 System.out.println("You can not afford that product.");
                 break;
@@ -49,11 +47,15 @@ public class ShoppingCart {
             else {
                 wait(5000);
                 // withdraw the price of the product from the wallet.
-                wallet.setBalance(wallet.getBalance() - price);
+                wallet.setBalance(balance - price);
 
                 // add the name of the product to the pocket file.
                 pocket.addProduct(product);
             }
+            
+            // Just to print everything again...
+            print(wallet, pocket);
+            product = scan(scanner);
         }
     }
 }
