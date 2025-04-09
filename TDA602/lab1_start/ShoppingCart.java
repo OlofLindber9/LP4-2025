@@ -29,6 +29,44 @@ public class ShoppingCart {
         String product = scan(scanner);
 
         while(!product.equals("quit")) {
+
+            if(product.equals("simulateRace")) {
+                Thread buyer1 = new Thread(() -> {
+                    try {
+                        boolean result = wallet.safeWithdraw(30000);  // assuming 100 credits
+                        System.out.println("Buyer1 withdrawal successful? " + result);
+                        if(result) {
+                            pocket.addProduct("car");
+                        }
+                    } catch (Exception e) {
+                        System.err.println("Buyer1 error: " + e.getMessage());
+                    }
+                });
+            
+                Thread buyer2 = new Thread(() -> {
+                    try {
+                        boolean result = wallet.safeWithdraw(30000);
+                        System.out.println("Buyer2 withdrawal successful? " + result);
+                        if(result) {
+                            pocket.addProduct("car");
+                        }
+                    } catch (Exception e) {
+                        System.err.println("Buyer2 error: " + e.getMessage());
+                    }
+                });
+                
+                buyer1.start();
+                buyer2.start();
+                
+                buyer1.join();
+                buyer2.join();
+
+                // Just to print everything again...
+                print(wallet, pocket);
+                product = scan(scanner);
+                break;
+            } else {
+            
             /* TODO:
                - check if the amount of credits is enough, if not stop the execution.
                - otherwise, withdraw the price of the product from the wallet.
@@ -46,6 +84,7 @@ public class ShoppingCart {
             // Just to print everything again...
             print(wallet, pocket);
             product = scan(scanner);
+            }
         }
     }
 }

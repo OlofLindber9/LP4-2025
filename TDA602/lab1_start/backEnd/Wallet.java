@@ -58,18 +58,24 @@ public class Wallet {
     private final Lock lockObj = new ReentrantLock();
 
     public boolean safeWithdraw(int valueToWithdraw) throws Exception {
-        lockObj.lock();
-        try {
+        //lockObj.lock();
+        //try {
+            boolean result;
             int balance = this.getBalance();
-            wait(5000);
+            //wait(5000);
             int newBalance = balance - valueToWithdraw;
+            System.out.println("balance" + balance);
+            System.out.println("valuetowithdraw" + valueToWithdraw);
             if (balance >= valueToWithdraw){
+                wait(1000);
                 this.setBalance(newBalance);
-                return true;
-            }
-            return false;
-        }finally{
-            lockObj.unlock();
-        }
+                result = true;
+            } else {
+           // }
+            result = false;}
+            return result;
+        //}finally{
+        //    lockObj.unlock();
+        //}
     }
 }
