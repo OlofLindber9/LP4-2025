@@ -13,18 +13,6 @@ public class ShoppingCart {
         return scanner.nextLine();
     }
 
-    private static void wait(int ms)
-    {
-        try
-        {
-            Thread.sleep(ms);
-        }
-        catch(InterruptedException ex)
-        {
-            Thread.currentThread().interrupt();
-        }
-    }
-
     public static void main(String[] args) throws Exception {
         Wallet wallet = new Wallet();
         Pocket pocket = new Pocket();
@@ -37,8 +25,7 @@ public class ShoppingCart {
 
             Integer price = Store.getProductPrice(product);
 
-            // check if the amount of credits is enough
-            // Integer balance = wallet.getBalance();
+            // withdraw the price of the product from the wallet.
             boolean withdrawal = wallet.safeWithdraw(price);
             if (!withdrawal) {
                 // If not stop the execution.
@@ -46,9 +33,6 @@ public class ShoppingCart {
                 break;
             }
             else {
-                // withdraw the price of the product from the wallet.
-                // wallet.setBalance(balance - price);
-
                 // add the name of the product to the pocket file.
                 pocket.addProduct(product);
             }

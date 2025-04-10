@@ -4,8 +4,6 @@ import java.io.IOException;
 import java.io.RandomAccessFile;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.concurrent.locks.Lock;
-import java.nio.channels.FileChannel;
-import java.nio.channels.FileLock;
 
 public class Wallet {
     /**
@@ -57,6 +55,29 @@ public class Wallet {
 	this.file.close();
     }
 
+    /**
+     * A safe withdraw to avoid data races of the wallet.
+     * 
+     * @param valueToWithdraw   amount to withdraw from the wallet.
+     * @return                  true if the withdraw was successful, false otherwise.
+     * @throws Exception
+     */
+    public boolean safeWithdraw(int valueToWithdraw) throws Exception {
+        lock.lock();
+        try {
+            int currentBalance = getBalance();
+            if (currentBalance >= valueToWithdraw) {
+                // Delay execution after call to getBalance to try to cause a data race.
+                wait(1000);
+                setBalance(currentBalance - valueToWithdraw);
+                return true;
+            }
+            return false;
+        } finally {
+            lock.unlock();
+        }
+    }
+
     private static void wait(int ms)
     {
         try
@@ -66,23 +87,6 @@ public class Wallet {
         catch(InterruptedException ex)
         {
             Thread.currentThread().interrupt();
-        }
-    }
-
-    public boolean safeWithdraw(int valueToWithdraw) throws Exception {
-        lock.lock();
-        wait(5000);
-        try {
-            int currentBalance = getBalance();
-            if (currentBalance >= valueToWithdraw) {
-                setBalance(currentBalance - valueToWithdraw);
-                wait(5000);
-                return true;
-            }
-            return false;
-        } finally {
-            wait(5000);
-            lock.unlock();
         }
     }
 }
