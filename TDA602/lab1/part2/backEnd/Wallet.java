@@ -2,24 +2,22 @@ package backEnd;
 import java.io.File;
 import java.io.IOException;
 import java.io.RandomAccessFile;
-import java.util.concurrent.locks.ReentrantLock;
-import java.util.concurrent.locks.Lock;
+import java.nio.channels.FileChannel;
+import java.nio.channels.FileLock;
 
 public class Wallet {
     /**
-     * The RandomAccessFile of the wallet file
+     * The File of the wallet file
      */  
-    private RandomAccessFile file;
-    private final Lock lock;
+    private final File file;
 
     /**
      * Creates a Wallet object
      *
-     * A Wallet object interfaces with the wallet RandomAccessFile
+     * A Wallet object interfaces with the wallet File
      */
     public Wallet () throws Exception {
-	this.file = new RandomAccessFile(new File("backEnd/wallet.txt"), "rw");
-    this.lock = new ReentrantLock();
+	    this.file = new File("backEnd/wallet.txt");
     }
 
     /**
@@ -27,14 +25,22 @@ public class Wallet {
      *
      * @return                   The content of the wallet file as an integer
      */
-    public int getBalance() throws IOException {
-        lock.lock();
-        try {
-            this.file.seek(0);
-            return Integer.parseInt(this.file.readLine());
-        } finally {
-            lock.unlock();
+    public int getBalance() throws Exception {
+        for (int i = 0; i < 10; i++) {
+            try (RandomAccessFile raf = new RandomAccessFile(file, "r")) {
+                raf.seek(0);
+                return Integer.parseInt(raf.readLine());
+            } catch (IOException e) {
+                System.out.println("File is locked, waiting to read...");
+                wait(5000);
+            }
         }
+        throw new Exception("Could not access the file.");
+    }
+
+    private int getBalance(RandomAccessFile raf) throws Exception {
+        raf.seek(0);
+        return Integer.parseInt(raf.readLine());
     }
 
     /**
@@ -42,40 +48,32 @@ public class Wallet {
      *
      * @param  newBalance          new balance to write in the wallet
      */
-    private void setBalance(int newBalance) throws Exception {
-    this.file.setLength(0);
-    String str = Integer.valueOf(newBalance).toString()+'\n'; 
-    this.file.writeBytes(str); 
+    private void setBalance(int newBalance, RandomAccessFile raf) throws Exception {
+        raf.setLength(0);
+        String str = Integer.valueOf(newBalance).toString()+'\n';
+        raf.writeBytes(str);
     }
 
-    /**
-     * Closes the RandomAccessFile in this.file
-     */
-    private void close() throws Exception {
-	this.file.close();
-    }
-
-    /**
-     * A safe withdraw to avoid data races of the wallet.
-     * 
-     * @param valueToWithdraw   amount to withdraw from the wallet.
-     * @return                  true if the withdraw was successful, false otherwise.
-     * @throws Exception
-     */
     public boolean safeWithdraw(int valueToWithdraw) throws Exception {
-        lock.lock();
-        try {
-            int currentBalance = getBalance();
-            if (currentBalance >= valueToWithdraw) {
-                // Delay execution after call to getBalance to try to cause a data race.
-                wait(1000);
-                setBalance(currentBalance - valueToWithdraw);
-                return true;
+        try (RandomAccessFile raf = new RandomAccessFile(file, "rw");
+            FileChannel channel = raf.getChannel();
+            FileLock lock = channel.lock()) {
+                
+                int newBalance = getBalance(raf) - valueToWithdraw;
+
+                // Sleep for 5 s to simulate data race
+                wait(5000);
+
+                // - check if the amount of credits is enough
+                if (newBalance < 0) {
+                    // if not stop the execution.
+                    return false;
+                } else {
+                    // - otherwise, withdraw the price of the product from the wallet.
+                    setBalance(newBalance, raf);
+                    return true;
+                }
             }
-            return false;
-        } finally {
-            lock.unlock();
-        }
     }
 
     private static void wait(int ms)
