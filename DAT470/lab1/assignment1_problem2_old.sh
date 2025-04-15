@@ -4,6 +4,7 @@ collect_info() {
   # The model of and the clock frequency of the CPU
   CPU_MODEL=$(lscpu | grep -m1 "Model name:" | cut -d':' -f2 | sed 's/^ //')
   CPU_CLOCK=$(lscpu | lscpu | grep "max MHz" | cut -d ":" -f2 | sed 's/^ //') # Does not work for remote nodes
+  # CPU_CLOCK=$(cat /sys/devices/system/cpu/cpu0/cpufreq/cpuinfo_max_freq)
 
   # The number of physical CPUs (sockets in use)
   SOCKETS=$(lscpu | grep -m1 "Socket(s):" | awk '{print $2}')
