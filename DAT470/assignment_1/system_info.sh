@@ -10,7 +10,7 @@
 echo "CPU Information:"
 if command -v lscpu &> /dev/null; then
     CPU_MODEL=$(lscpu | grep "Model name:" | sed 's/Model name:[ \t]*//')
-    CPU_MHZ=$(lscpu | grep "CPU MHz:" | sed 's/CPU MHz:[ \t]*//')
+    CPU_MHZ=$(lscpu | grep "CPU max MHz:" | sed 's/CPU max MHz:[ \t]*//')
 else
     CPU_MODEL=$(grep -m 1 "model name" /proc/cpuinfo | cut -d ':' -f2 | sed 's/^[ \t]*//')
     CPU_MHZ=$(grep -m 1 "cpu MHz" /proc/cpuinfo | cut -d ':' -f2 | sed 's/^[ \t]*//')
