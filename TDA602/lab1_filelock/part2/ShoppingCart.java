@@ -22,19 +22,18 @@ public class ShoppingCart {
         String product = scan(scanner);
 
         while(!product.equals("quit")) {
-
-            Integer price = Store.getProductPrice(product);
-
-            // withdraw the price of the product from the wallet.
-            boolean withdrawal = wallet.safeWithdraw(price);
-            if (!withdrawal) {
-                // If not stop the execution.
-                System.out.println("You can not afford that product.");
-                break;
+            try {
+                int price = Store.getProductPrice(product);
+                if (!wallet.safeWithdraw(price)) {
+                    System.out.println("You can not afford that product.");
+                } else {
+                    // - add the name of the product to the pocket file.
+                    pocket.addProduct(product);
+                    // - print the new balance.
+                }
             }
-            else {
-                // add the name of the product to the pocket file.
-                pocket.addProduct(product);
+            catch (Exception e) {
+                System.out.println(e.getMessage());
             }
 
             // Just to print everything again...
