@@ -130,27 +130,26 @@ if __name__ == '__main__':
         sys.stderr.write(f'{sys.argv[0]}: ERROR: Batch size must be positive (got {batch_size})!\n')
         quit(1)
 
-    t2 = time.time()
+    t1 = time.time()
     file_counts = list()
     # Using multiprocessing.Pool, parallelize the loop that counts the words.
     with mp.Pool(num_workers) as p:
         file_counts = p.map(count_words_in_file, get_filenames(path))
 
-    t3 = time.time()
+    t2 = time.time()
     global_counts = dict()
     for counts in file_counts:
         merge_counts(global_counts,counts)
     
-    t4 = time.time()
+    t3 = time.time()
     top10 = get_top10(global_counts)
-    print(top10)
     
-    t5 = time.time()
+    t4 = time.time()
 
-    time_count_words = t3 - t2
-    time_merge_counts = t4 - t3
-    time_get_top10 = t5 - t4
-    time_total = t5 - t2
+    time_count_words = t2 - t1
+    time_merge_counts = t3 - t2
+    time_get_top10 = t4 - t3
+    time_total = t4 - t1
     print(f"Time spent on count_words(): {time_count_words:.2f} seconds")
     print(f"Time spent on merge_counts(): {time_merge_counts:.2f} seconds")
     print(f"Time spent on get_top10(): {time_get_top10:.2f} seconds")

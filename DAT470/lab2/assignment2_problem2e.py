@@ -143,7 +143,6 @@ if __name__ == '__main__':
     
     t4 = time.time()
     top10 = get_top10(global_counts)
-    print(top10)
     
     t5 = time.time()
 
@@ -151,7 +150,6 @@ if __name__ == '__main__':
     time_count_words = t3 - t2
     time_merge_counts = t4 - t3
     time_get_top10 = t5 - t4
-    time_parallelizable = time_count_words + time_merge_counts
     time_total = t5 - t1
     print(f"Time spent on get_file() and get_filenames(): {time_get_files:.2f} seconds")
     print(f"Time spent on count_words(): {time_count_words:.2f} seconds")
