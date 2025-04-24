@@ -59,7 +59,7 @@ def count_words_in_file(filename_queue,wordcount_queue,batch_size):
             if filename is None:
                 wordcount_queue.put(counts)
                 wordcount_queue.put(None)
-                break
+                return
 
             file = get_file(filename)
 
@@ -169,13 +169,6 @@ if __name__ == '__main__':
  
     # construct a special merger process
     merger = mp.Process(target=merge_counts, args=(out_queue,wordcount_queue,num_workers))
-
-    # put filenames into the input queue
-    for filename in get_filenames(path):
-        filename_queue.put(filename)
-    # put None into the input queue to signal end of input
-    for _ in range(num_workers):
-        filename_queue.put(None)
     
     # workers then put dictionaries for the merger
     for worker in workers:
@@ -183,6 +176,13 @@ if __name__ == '__main__':
 
     # the merger shall return the checksum and top 10 through the out queue
     merger.start()
+
+    # put filenames into the input queue
+    for filename in get_filenames(path):
+        filename_queue.put(filename)
+    # put None into the input queue to signal end of input
+    for _ in range(num_workers):
+        filename_queue.put(None)
 
     # wait for all workers to finish
     for worker in workers:
@@ -195,7 +195,4 @@ if __name__ == '__main__':
     t2 = time.time()
     # print the results
     print(f'Checksum: {checksum}')
-    print('Top 10 words:')
-    for (count,word) in top10:
-        print(f'{word}: {count}')
     print(f'Total time with {num_workers} processes: {t2-t1:.2f} seconds')

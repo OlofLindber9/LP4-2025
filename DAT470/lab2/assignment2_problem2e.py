@@ -100,7 +100,8 @@ def compute_checksum(counts):
     Return value:
     The checksum (int)
     """
-    return sum([len(k) * v for (k,v) in counts])
+    return sum(len(k) * v for (k,v) in counts.items())
+
 
 
 if __name__ == '__main__':
@@ -131,28 +132,31 @@ if __name__ == '__main__':
     files = [get_file(fn) for fn in get_filenames(path)]
 
     t2 = time.time()
+    # Count the words in each file
     file_counts = list()
-    # Using multiprocessing.Pool, parallelize the loop that counts the words.
     with mp.Pool(num_workers) as p:
         file_counts = p.map(count_words_in_file, files)
 
     t3 = time.time()
+    # Merge the counts
     global_counts = dict()
     for counts in file_counts:
         merge_counts(global_counts,counts)
     
     t4 = time.time()
+    # Compute the checksum and top 10
     top10 = get_top10(global_counts)
+    checksum = compute_checksum(global_counts)
     
     t5 = time.time()
 
-    time_get_files = t2 - t1
+    time_read_files = t2 - t1
     time_count_words = t3 - t2
     time_merge_counts = t4 - t3
-    time_get_top10 = t5 - t4
+    time_get_top10_checksum = t5 - t4
     time_total = t5 - t1
-    print(f"Time spent on get_file() and get_filenames(): {time_get_files:.2f} seconds")
-    print(f"Time spent on count_words(): {time_count_words:.2f} seconds")
-    print(f"Time spent on merge_counts(): {time_merge_counts:.2f} seconds")
-    print(f"Time spent on get_top10(): {time_get_top10:.2f} seconds")
-    print(f"Total time: {time_total:.2f} seconds")
+    print(f"Time spent on reading files: {time_read_files:.2f} seconds")
+    print(f"Time spent on counting words: {time_count_words:.2f} seconds")
+    print(f"Time spent on merging counts: {time_merge_counts:.2f} seconds")
+    print(f"Time spent on computing top 10 and checksum: {time_get_top10_checksum:.2f} seconds")
+    print(f"Total time with {num_workers} workers: {time_total:.2f} seconds")

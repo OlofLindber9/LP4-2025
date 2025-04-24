@@ -100,7 +100,7 @@ def compute_checksum(counts):
     Return value:
     The checksum (int)
     """
-    return sum([len(k) * v for (k,v) in counts])
+    return sum(len(k) * v for (k,v) in counts.items())
 
 
 if __name__ == '__main__':
@@ -137,4 +137,7 @@ if __name__ == '__main__':
         merge_counts(global_counts,counts)
     
     top10 = get_top10(global_counts)
-    print(top10)
+    
+    print('Top 10 words:')
+    for (count,word) in top10:
+        print(f'{word}: {count}')
