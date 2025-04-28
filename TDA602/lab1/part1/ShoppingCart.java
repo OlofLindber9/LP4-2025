@@ -26,7 +26,7 @@ public class ShoppingCart {
                 int newBalance = wallet.getBalance() - Store.getProductPrice(product);
 
                 // Sleep for 5 s to simulate data race
-                wait(5000);
+                //wait(5000);
 
                 // - check if the amount of credits is enough
                 if (newBalance < 0) {

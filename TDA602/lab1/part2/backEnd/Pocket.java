@@ -28,6 +28,7 @@ public class Pocket {
      */
     public void addProduct(String product) throws Exception {
         this.file.seek(this.file.length());
+        wait(5000);
         this.file.writeBytes(product+'\n'); 
     }
 
