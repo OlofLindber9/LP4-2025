@@ -5,7 +5,10 @@ from mrjob.job import MRJob
 class MRMineral(MRJob):
     def mapper(self, _, line):
         fields = line.split(',')
-        sun = f"{fields[1]} {fields[0]}"
+        if fields[1] == 'Prime':
+            sun = fields[0]
+        else:
+            sun = f"{fields[1]} {fields[0]}"
         try:
             mineral_value = int(fields[5])
         except (ValueError):
