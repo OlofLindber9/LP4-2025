@@ -17,7 +17,7 @@ class MRJobTwitterFollows(MRJob):
         user = fields[0]
         follows = fields[1]
         #print(follows)
-        follows = [f for f in follows.split(",") if f.strip()]
+        follows = [f for f in follows.split(" ") if f.strip()]
         number_of_followed_accounts = len(follows)
         yield (user, number_of_followed_accounts)
     
