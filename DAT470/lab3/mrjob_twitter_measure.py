@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-from assignment3_problem3 import MRJobTwitterFollows
+from assignment3_problem4 import MRJobTwitterFollowers
 import time
 import argparse
 
@@ -12,7 +12,7 @@ if __name__ == '__main__':
     parser.add_argument('-w', '--num-workers', type=int, default=1)
     parser.add_argument('filename')
     args = parser.parse_args()
-    mr_job = MRJobTwitterFollows(args=[
+    mr_job = MRJobTwitterFollowers(args=[
         '-r', 'local',
         '--num-cores',
         str(args.num_workers),
