@@ -2,6 +2,7 @@
 
 from mrjob.job import MRJob
 from mrjob.step import MRStep
+import time
 
 class MRJobTwitterFollows(MRJob):
     # The final (key,value) pairs returned by the class should be
@@ -34,9 +35,6 @@ class MRJobTwitterFollows(MRJob):
             if number_of_followed_accounts == 0:
                 follows_no_one += 1
             total_follows += number_of_followed_accounts
-        print(len(data))
-        print(total_follows)
-        print(follows_no_one)
         yield ('most followed id', data[0][0])
         yield ('most followed', data[0][1])
         yield ('average followed', total_follows/len(data))
