@@ -1,5 +1,4 @@
 #!/bin/bash
-#SBATCH -w uranus
 
 SCRIPT="assignment2_problem2f.py"
 
