@@ -6,12 +6,8 @@ class MRJobTwitterFollows(MRJob):
     def mapper(self, _, line):
         fields = line.split(':')
         user_id = fields[0]
-        followers = [f for f in fields[1].split(' ') if f.strip()]
-        yield (user_id, len(followers))
-
-    def combiner(self, user_id, follower_counts):
-        total_followers = sum(follower_counts)
-        yield (None, (user_id, total_followers))
+        following = [f for f in fields[1].split(' ') if f.strip()]
+        yield (None, (user_id, len(following)))
 
     def reducer(self, _, id_and_followers):
         id_and_followers = list(id_and_followers)

