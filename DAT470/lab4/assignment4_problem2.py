@@ -96,14 +96,16 @@ def compute_decade_diff(df):
     Return value: a pandas dataframe with the difference between the average temperature of the 2010s and the 1910s
     """
     # Filter for 2010s and 1910s
-    df_2010s = df.filter(col('DECADE') == 2010)
-    df_1910s = df.filter(col('DECADE') == 1910)
+    t2010 = df[df['DECADE'] == 2010]['TAVG']
+    t1910 = df[df['DECADE'] == 1910]['TAVG']
 
-    # Compute the difference
-    diff = df_2010s['TAVG'] - df_1910s['TAVG']
-    
+    if t2010.empty or t1910.empty:
+        diff = float('nan')
+    else:
+        diff = t2010.iloc[0] - t1910.iloc[0]
+        
     return pd.DataFrame([{
-        'STATION': df_2010s['STATION'].iloc[0],
+        'STATION': df['STATION'].iloc[0],
         'DIFF': diff
     }])
 
@@ -174,40 +176,61 @@ if __name__ == '__main__':
     # # Here you will need to implement computing the decadewise differences 
     # # between the average temperatures of 1910s and 2010s
     # # Compute the average temperature for each decade
-    df_decade = df.withColumn('DECADE', decade(col('DATE')))
+    df_celsius = df.withColumn('TAVG', (col('TAVG') - 32) * 5.0 / 9)
+    df_decade = df_celsius.withColumn('DECADE', decade(col('DATE')))
     df_decade_temp = df_decade.groupBy('STATION', 'DECADE') \
-        .applyInPandas(decade_avg, schema='STATION STRING, DECADE INT, TAVG DOUBLE') \
+        .applyInPandas(decade_avg, schema='STATION STRING, DECADE INT, TAVG DOUBLE')
+    # Compute the difference between the average temperature of the 2010s and the 1910s
+    df_decade_diff = df_decade_temp.groupBy('STATION') \
         .applyInPandas(compute_decade_diff, schema='STATION STRING, DIFF DOUBLE')
-    df_decade_temp.show()
+    
+    # Add the station name to the dataframe
+    station_names = df.select('STATION', 'NAME').dropDuplicates(['STATION'])
+    df_decade_diff = df_decade_diff.join(station_names, on='STATION', how='left')
+
+    df_decade_diff_sorted = df_decade_diff.orderBy(col('DIFF').desc())
 
     # Compute the difference between the average temperature of the 2010s and the 1910s
     # df_decade_2010s = df_decade.filter(col('DECADE') == 2010)
     # df_decade_1910s = df_decade.filter(col('DECADE') == 1910)
 
-    # # There should probably be an if statement to check if any such values were 
-    # # computed (no suitable stations in the tiny dataset!)
+    # There should probably be an if statement to check if any such values were 
+    # computed (no suitable stations in the tiny dataset!)
 
-    # # Note that values should be printed in celsius
+    # Note that values should be printed in celsius
 
-    # # Replace None with an appropriate expression
-    # # Replace STATION, STATIONNAME, and TAVGDIFF with appropriate expressions
+    # Replace None with an appropriate expression
+    # Replace STATION, STATIONNAME, and TAVGDIFF with appropriate expressions
 
     # print('Top 5 differences:')
-    # for row in None:
+    # for row in df_decade_diff_sorted.limit(5).collect():
+    #     STATION = row['STATION']
+    #     STATIONNAME = row['NAME']
+    #     TAVGDIFF = row['DIFF']
     #     print(f'{STATION} at {STATIONNAME} difference {TAVGDIFF:0.1f} °C)')
 
     # # replace None with an appropriate expression
     # print('Fraction of positive differences:')
-    # print(None)
+    # fraction_positive_diff = df_decade_diff_sorted.filter(col('DIFF') > 0).count() / df_decade_diff_sorted.filter(col('DIFF').isNotNull()).count()
+    # print(fraction_positive_diff)
 
-    # # Five-number summary of temperature differences, replace with appropriate expressions
-    # print('Five-number summary of decade average difference values:')
-    # tdiff_min, tdiff_q1, tdiff_median, tdiff_q3, tdiff_max = 5*[0.0]
-    # print(f'tdiff_min {tdiff_min:0.1f} °C')
-    # print(f'tdiff_q1 {tdiff_q1:0.1f} °C')
-    # print(f'tdiff_median {tdiff_median:0.1f} °C')
-    # print(f'tdiff_q3 {tdiff_q3:0.1f} °C')
-    # print(f'tdiff_max {tdiff_max:0.1f} °C')
+    # Five-number summary of temperature differences, replace with appropriate expressions
+    print('Five-number summary of decade average difference values:')
+    # Extract the DIFF column
+    decade_diff = df_decade_diff_sorted.select('DIFF').collect()
+    diff_values = [row['DIFF'] for row in decade_diff if row['DIFF'] is not None]
+    print(diff_values)
+    nr_rows = len(diff_values)
+    tdiff_max = diff_values[0]
+    tdiff_min = diff_values[-1]
+    tdiff_q1 = diff_values[3 * nr_rows // 4]
+    tdiff_median = diff_values[nr_rows // 2]
+    tdiff_q3 = diff_values[nr_rows // 4]
+    print(f'tdiff_min {tdiff_min:0.1f} °C')
+    print(f'tdiff_q1 {tdiff_q1:0.1f} °C')
+    print(f'tdiff_median {tdiff_median:0.1f} °C')
+    print(f'tdiff_q3 {tdiff_q3:0.1f} °C')
+    print(f'tdiff_max {tdiff_max:0.1f} °C')
 
     # # Add your time measurements here
     # # It may be interesting to also record more fine-grained times (e.g., how 
