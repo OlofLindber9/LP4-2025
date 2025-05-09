@@ -4,6 +4,7 @@ from pyspark.sql import SparkSession
 from pyspark.sql.functions import udf, col
 from pyspark.sql.types import IntegerType, StructType, StructField, DoubleType, StringType
 import pandas as pd
+from math import floor
 import sys
 
 @udf(returnType=IntegerType())
@@ -36,8 +37,8 @@ def jdn(dt):
 # key is the group key, df is a Pandas dataframe
 # should return a Pandas dataframe
 def lsq(key,df):
-    x = df["TAVG"]
-    y = df["JudianDate"]
+    y = df["TAVG"]
+    x = df["JudianDate"]
 
     x_mean = x.mean()
     y_mean = y.mean()
@@ -48,8 +49,15 @@ def lsq(key,df):
     beta = (deltaX * deltaY).sum() / (deltaX ** 2).sum()
     alpha = y_mean - beta * x_mean
 
-    return pd.DataFrame({"station": key, "alpha": alpha,"beta": beta})
+    return pd.DataFrame({"STATION": key, "alpha": alpha,"beta": beta})
 
+def decAvg(key,df):
+    x = df["TAVG"]
+    name = df["NAME"].iloc[0]
+    x_count = len(x)
+    x_sum = x.sum()
+    tAvg = x_sum/x_count
+    return pd.DataFrame({"STATION": key,"NAME": name, "TAVG": tAvg})
 
 if __name__ == '__main__':
     # do not change the interface
@@ -69,19 +77,20 @@ if __name__ == '__main__':
     
     # read the CSV file into a pyspark.sql dataframe and compute the things you need
 
-    df = spark.read.csv(args[0])
+    df = spark.read.csv(args.filename, header=True, inferSchema = True)
+
 
     #Computes the Julian date number for each record
-    df.withColumn("JudianDate", jdn(col("DATE")))
+    df = df.withColumn("JudianDate", jdn(col("DATE")))
     
     #Computes the T average number for each record
-    df.withColumn("TAVG", (col("TMIN") + col("TMAX")) / 2)
+    df = df.withColumn("TAVG", (col("TMIN") + col("TMAX")) / 2)
 
     # For each station, performs fits a simple linear regression model 
     # using least squares (Tavg as function of JDN)
 
     regressionSchema = StructType([
-    StructField("station", StringType()),  # or use "STATION" if you prefer a clearer name
+    StructField("STATION", StringType()),
     StructField("alpha", DoubleType()),
     StructField("beta", DoubleType())
     ])
@@ -96,6 +105,30 @@ if __name__ == '__main__':
 
     top5 = regressionDf.orderBy(col("beta").desc()).limit(5)
     rows = top5.collect()
+
+    # Sort by beta in descending order
+    betas = regressionDf.orderBy(col("beta").desc()).select("beta").collect()
+
+    betas = [row["beta"] for row in betas]
+    print(betas)
+    betas_count = len(betas)
+
+    beta_max = betas[0]
+    beta_min = betas[-1]
+
+    beta_median = betas[floor(betas_count / 2)]
+
+    beta_q1 = betas[floor(betas_count * 3 / 4)] 
+    beta_q3 = betas[floor(betas_count / 4)] 
+
+    negative_betas = 0
+    positive_betas = 0
+    for b in betas:
+        if b >= 0:
+            positive_betas += 1
+        if b < 0:
+            negative_betas += 1 
+
     # top 5 slopes are printed here
     # replace None with your dataframe, list, or an appropriate expression
     # replace STATIONCODE, STATIONNAME, and BETA with appropriate expressions
@@ -105,11 +138,10 @@ if __name__ == '__main__':
 
     # replace None with an appropriate expression
     print('Fraction of positive coefficients:')
-    print(None)
+    print(f'{positive_betas/betas_count}')
 
     # Five-number summary of slopes, replace with appropriate expressions
     print('Five-number summary of BETA values:')
-    beta_min, beta_q1, beta_median, beta_q3, beta_max = 5*[0.0]
     print(f'beta_min {beta_min:0.3e}')
     print(f'beta_q1 {beta_q1:0.3e}')
     print(f'beta_median {beta_median:0.3e}')
@@ -118,6 +150,34 @@ if __name__ == '__main__':
 
     # Here you will need to implement computing the decadewise differences 
     # between the average temperatures of 1910s and 2010s
+
+    df_1910s = df.filter((col("JudianDate") > 2418673) & (col("JudianDate") < 2422325))
+    df_2010s = df.filter((col("JudianDate") > 2455198) & (col("JudianDate") < 2458850))
+
+    if(df_1910s.count() <= 0):
+        print("No data from 1910!")
+        raise RuntimeError("NO DATA FROM 1910s")
+    
+    tAvgSchema = StructType([
+    StructField("STATION", StringType()),
+    StructField("NAME", StringType()),
+    StructField("TAVG", DoubleType())
+    ])
+    
+    tAvg1910sDf = df_1910s.groupBy("STATION").applyInPandas(decAvg, tAvgSchema)
+    tAvg2010sDf = df_2010s.groupBy("STATION").applyInPandas(decAvg, tAvgSchema)
+
+    tAvg1910sDf_ = tAvg1910sDf.withColumnRenamed("TAVG", "1910TAVG")
+    tAvg2010sDf_ = tAvg2010sDf.withColumnRenamed("TAVG", "2010TAVG")
+
+    merged = tAvg1910sDf_.join(tAvg2010sDf_, on="STATION", how="inner")
+
+    tAvgDiff = merged.withColumn("TAVG_diff", col("2010TAVG") - col("1910TAVG"))
+
+    tAvgDiff = tAvgDiff.withColumn("TAVG_diff", col("TAVG_diff") * 5 / 9) #we Multiply by 5/9 to convert Δ°F to Δ°C
+
+    top5Diff = tAvgDiff.orderBy(col("TAVG_diff").desc()).limit(5)
+    rowsDiff = top5Diff.collect()
 
     # There should probably be an if statement to check if any such values were 
     # computed (no suitable stations in the tiny dataset!)
@@ -128,8 +188,8 @@ if __name__ == '__main__':
     # Replace STATION, STATIONNAME, and TAVGDIFF with appropriate expressions
 
     print('Top 5 differences:')
-    for row in None:
-        print(f'{STATION} at {STATIONNAME} difference {TAVGDIFF:0.1f} °C)')
+    for row in rowsDiff:
+        print(f'{row["STATION"]} at {row["NAME"]} difference {row["TAVG_diff"]:0.1f} °C)')
 
     # replace None with an appropriate expression
     print('Fraction of positive differences:')
