@@ -76,15 +76,18 @@ if __name__ == '__main__':
             .getOrCreate()
     
     # read the CSV file into a pyspark.sql dataframe and compute the things you need
-
+    start = time.time()
     df = spark.read.csv(args.filename, header=True, inferSchema = True)
 
+    startComputation = time.time()
 
     #Computes the Julian date number for each record
     df = df.withColumn("JudianDate", jdn(col("DATE")))
     
     #Computes the T average number for each record
     df = df.withColumn("TAVG", (col("TMIN") + col("TMAX")) / 2)
+
+    df = df.withColumn("TAVG", (col("TAVG") - 32) * 5 / 9) #convert to celsius
 
     # For each station, performs fits a simple linear regression model 
     # using least squares (Tavg as function of JDN)
@@ -110,7 +113,6 @@ if __name__ == '__main__':
     betas = regressionDf.orderBy(col("beta").desc()).select("beta").collect()
 
     betas = [row["beta"] for row in betas]
-    print(betas)
     betas_count = len(betas)
 
     beta_max = betas[0]
@@ -174,11 +176,32 @@ if __name__ == '__main__':
 
     tAvgDiff = merged.withColumn("TAVG_diff", col("2010TAVG") - col("1910TAVG"))
 
-    tAvgDiff = tAvgDiff.withColumn("TAVG_diff", col("TAVG_diff") * 5 / 9) #we Multiply by 5/9 to convert Δ°F to Δ°C
+    tAvgDiff = tAvgDiff.withColumn("TAVG_diff", col("TAVG_diff"))
 
     top5Diff = tAvgDiff.orderBy(col("TAVG_diff").desc()).limit(5)
     rowsDiff = top5Diff.collect()
 
+
+    diffs = tAvgDiff.orderBy(col("TAVG_diff").desc()).select("TAVG_diff").collect()
+
+    diffs = [diff["TAVG_diff"] for diff in diffs]
+    diffs_count = len(diffs)
+
+    tdiff_max = diffs[0]
+    tdiff_min = diffs[-1]
+
+    tdiff_median = diffs[floor(diffs_count / 2)]
+
+    tdiff_q1 = diffs[floor(diffs_count * 3 / 4)] 
+    tdiff_q3 = diffs[floor(diffs_count / 4)] 
+
+    negative_diffs = 0
+    positive_diffs = 0
+    for d in diffs:
+        if d >= 0:
+            positive_diffs += 1
+        if d < 0:
+            negative_diffs += 1 
     # There should probably be an if statement to check if any such values were 
     # computed (no suitable stations in the tiny dataset!)
 
@@ -186,18 +209,19 @@ if __name__ == '__main__':
 
     # Replace None with an appropriate expression
     # Replace STATION, STATIONNAME, and TAVGDIFF with appropriate expressions
-
+    end = time.time()
+    total_time = end - start
+    total_computation_time = end - startComputation
     print('Top 5 differences:')
     for row in rowsDiff:
         print(f'{row["STATION"]} at {row["NAME"]} difference {row["TAVG_diff"]:0.1f} °C)')
 
     # replace None with an appropriate expression
     print('Fraction of positive differences:')
-    print(None)
+    print(f'{positive_diffs/diffs_count}')
 
     # Five-number summary of temperature differences, replace with appropriate expressions
     print('Five-number summary of decade average difference values:')
-    tdiff_min, tdiff_q1, tdiff_median, tdiff_q3, tdiff_max = 5*[0.0]
     print(f'tdiff_min {tdiff_min:0.1f} °C')
     print(f'tdiff_q1 {tdiff_q1:0.1f} °C')
     print(f'tdiff_median {tdiff_median:0.1f} °C')
@@ -208,4 +232,6 @@ if __name__ == '__main__':
     # It may be interesting to also record more fine-grained times (e.g., how 
     # much time was spent computing vs. reading data)
     print(f'num workers: {args.num_workers}')
-    print(f'total time: {None:0.1f} s')
+    print(f'total time: {total_time} s')
+    print(f'total computation time: {total_computation_time} s')
+    print(f'total reading time: {total_time - total_computation_time} s')
