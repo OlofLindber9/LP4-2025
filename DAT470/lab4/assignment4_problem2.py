@@ -1,7 +1,7 @@
 import time
 import argparse
 from pyspark.sql import SparkSession
-from pyspark.sql.functions import udf, col, format_string
+from pyspark.sql.functions import udf, col, avg
 from pyspark.sql.types import IntegerType
 import pandas as pd
 import sys
@@ -68,23 +68,6 @@ def lsq(df):
         'STATION': df['STATION'].iloc[0],
         'ALPHA': alpha,
         'BETA': beta
-    }])   
-
-def decade_avg(df):
-    """
-    Computes the average temperature for a decade.
-    Parameters:
-    - df, pandas dataframe : the dataframe containing the data
-
-    Return value: a pandas dataframe with the average temperature for the decade
-    """
-    temp = df['TAVG']
-    # Compute the average temperature for each decade
-    avg_temp = temp.mean()
-    return pd.DataFrame([{
-        'STATION': df['STATION'].iloc[0],
-        'DECADE': df['DECADE'].iloc[0],
-        'TAVG': avg_temp
     }])
 
 def compute_decade_diff(df):
@@ -100,7 +83,7 @@ def compute_decade_diff(df):
     t1910 = df[df['DECADE'] == 1910]['TAVG']
 
     if t2010.empty or t1910.empty:
-        diff = float('nan')
+        return pd.DataFrame([])
     else:
         diff = t2010.iloc[0] - t1910.iloc[0]
         
@@ -125,115 +108,110 @@ if __name__ == '__main__':
             .config("spark.driver.memory", "16g") \
             .getOrCreate()
     
+    # Start the timer
+    start_time = time.time()
+
     # read the CSV file into a pyspark.sql dataframe and compute the things you need
     df = spark.read.csv(args.filename, header=True, inferSchema=True)
 
-    # Compute the Julian date number for each date
-    df = df.withColumn('JDN', jdn(col('DATE')))
-    # Compute T_avg
-    df = df.withColumn('TAVG', (col('TMAX') + col('TMIN')) / 2.0)
+    # Add Julian date number, average temperature (in F and C), and decade to the dataframe
+    df = df.withColumn('JDN', jdn(col('DATE'))) \
+        .withColumn('TAVG', (col('TMAX') + col('TMIN')) / 2.0) \
+        .withColumn('TAVG_C', (col('TAVG') - 32) * 5.0 / 9) \
+        .withColumn('DECADE', decade(col('DATE')))
+
+    # Cache the dataframe to speed up computations
+    df = df.cache()
+
     # For each station, performs fits a simple linear regression model using 
     # least squares (T_avg as function of JDN)
     pd_lsq = df.groupBy('STATION').applyInPandas(lsq, schema='STATION STRING, ALPHA DOUBLE, BETA DOUBLE')
 
     # Add the station name to the dataframe
-    station_names = df.select('STATION', 'NAME').dropDuplicates(['STATION'])
+    station_names = df.select('STATION', 'NAME').dropDuplicates(['STATION']).cache()
     pd_lsq_named = pd_lsq.join(station_names, on='STATION', how='left')
-    # Print the station code, station name, and the slope of the top 5 stations with the greatest slope
-    pd_lsq_sorted = pd_lsq_named.orderBy(col('BETA').desc()) 
-    # .select('STATION', 'NAME', col('BETA').alias('SLOPE')) \
-    #     .limit(5)
-    
-    # # top 5 slopes are printed here
-    # print('Top 5 coefficients:')
-    # for row in pd_lsq_sorted.limit(5).collect():
-    #     STATIONCODE = row['STATION']
-    #     STATIONNAME = row['NAME']
-    #     BETA = row['BETA']
-    #     print(f'{STATIONCODE} at {STATIONNAME} BETA={BETA:0.3e} °F/d')
+    pd_lsq_named = pd_lsq_named.cache()
 
-    # # replace None with an appropriate expression
-    # print('Fraction of positive coefficients:')
-    # fraction_positive = pd_lsq_sorted.filter(col('BETA') > 0).count() / pd_lsq_sorted.count()
-    # print(fraction_positive)
+    # top 5 slopes are printed here
+    print('Top 5 coefficients:')
+    t_1 = time.time()
+    top_5 = pd_lsq_named.orderBy(col('BETA').desc()).limit(5).collect()
+    t_2 = time.time()
+    for row in top_5:
+        STATIONCODE = row['STATION']
+        STATIONNAME = row['NAME']
+        BETA = row['BETA']
+        print(f'{STATIONCODE} at {STATIONNAME} BETA={BETA:0.3e} °F/d')
 
-    # Prints the five-number summary of the slopes,
-    # i.e. minimum, first quartile, median, third quartile, and maximum
-    # pd_lsq = pd_lsq.withColumn('BETA', pd_lsq['BETA'].cast('double'))
-    # five_num_sum = pd_lsq \
-    #     .approxQuantile('BETA', [0, 0.25, 0.5, 0.75, 1], 0.0)
-    # five_num_sum.show()
+    print('Fraction of positive coefficients:')
+    t_3 = time.time()
+    fraction_positive = pd_lsq_named.filter(col('BETA') > 0).count() / pd_lsq_named.count()
+    t_4 = time.time()
+    print(fraction_positive)
 
-    # Five-number summary of slopes, replace with appropriate expressions
-    # print('Five-number summary of BETA values:')
-    # beta_min, beta_q1, beta_median, beta_q3, beta_max = 5*[0.0]
-    # print(f'beta_min {beta_min:0.3e}')
-    # print(f'beta_q1 {beta_q1:0.3e}')
-    # print(f'beta_median {beta_median:0.3e}')
-    # print(f'beta_q3 {beta_q3:0.3e}')
-    # print(f'beta_max {beta_max:0.3e}')
+    # Five-number summary of slopes
+    print('Five-number summary of BETA values:')
+    five_num = pd_lsq_named.approxQuantile('BETA', [0.0, 0.25, 0.5, 0.75, 1.0], 0.0)
+    print(f'beta_min {five_num[0]:0.3e}')
+    print(f'beta_q1 {five_num[1]:0.3e}')
+    print(f'beta_median {five_num[2]:0.3e}')
+    print(f'beta_q3 {five_num[3]:0.3e}')
+    print(f'beta_max {five_num[4]:0.3e}')
 
-    # # Here you will need to implement computing the decadewise differences 
-    # # between the average temperatures of 1910s and 2010s
-    # # Compute the average temperature for each decade
-    df_celsius = df.withColumn('TAVG', (col('TAVG') - 32) * 5.0 / 9)
-    df_decade = df_celsius.withColumn('DECADE', decade(col('DATE')))
-    df_decade_temp = df_decade.groupBy('STATION', 'DECADE') \
-        .applyInPandas(decade_avg, schema='STATION STRING, DECADE INT, TAVG DOUBLE')
+    # Here you will need to implement computing the decadewise differences 
+    # between the average temperatures of 1910s and 2010s
+
+    df_decade_temp = df.groupBy('STATION', 'DECADE') \
+        .agg(avg('TAVG').alias('TAVG'))
     # Compute the difference between the average temperature of the 2010s and the 1910s
     df_decade_diff = df_decade_temp.groupBy('STATION') \
         .applyInPandas(compute_decade_diff, schema='STATION STRING, DIFF DOUBLE')
     
+    df_decade_diff = df_decade_diff.cache()
     # Add the station name to the dataframe
-    station_names = df.select('STATION', 'NAME').dropDuplicates(['STATION'])
     df_decade_diff = df_decade_diff.join(station_names, on='STATION', how='left')
 
-    df_decade_diff_sorted = df_decade_diff.orderBy(col('DIFF').desc())
+    # Check if any suitable values were computed
+    t_5 = time.time()
+    nr_of_decades = df_decade_diff.count()
+    t_6 = time.time()
+    if nr_of_decades == 0:
+        print('No suitable stations found for computing the decadewise differences.')
+    else:
+        print('Top 5 differences:')
+        t_7 = time.time()
+        # Sort by the difference in descending order
+        top_5_diff = df_decade_diff.orderBy(col('DIFF').desc()).limit(5).collect()
+        t_8 = time.time()
+        for row in top_5_diff:
+            STATION = row['STATION']
+            STATIONNAME = row['NAME']
+            TAVGDIFF = row['DIFF']
+            print(f'{STATION} at {STATIONNAME} difference {TAVGDIFF * 5.0 / 9:0.1f} °C)')
 
-    # Compute the difference between the average temperature of the 2010s and the 1910s
-    # df_decade_2010s = df_decade.filter(col('DECADE') == 2010)
-    # df_decade_1910s = df_decade.filter(col('DECADE') == 1910)
+        print('Fraction of positive differences:')
+        t_9 = time.time()
+        fraction_positive_diff = df_decade_diff.filter(col('DIFF') > 0).count() / df_decade_diff.count()
+        t_10 = time.time()
+        print(fraction_positive_diff)
 
-    # There should probably be an if statement to check if any such values were 
-    # computed (no suitable stations in the tiny dataset!)
+        # Five-number summary of temperature differences, replace with appropriate expressions
+        print('Five-number summary of decade average difference values:')
+        five_num = df_decade_diff.approxQuantile('DIFF', [0.0, 0.25, 0.5, 0.75, 1.0], 0.0)
+        for i in range(len(five_num)):
+            five_num[i] = five_num[i] * 5.0 / 9
+        print(f'tdiff_min {five_num[0]:0.1f} °C')
+        print(f'tdiff_q1 {five_num[1]:0.1f} °C')
+        print(f'tdiff_median {five_num[2]:0.1f} °C')
+        print(f'tdiff_q3 {five_num[3]:0.1f} °C')
+        print(f'tdiff_max {five_num[4]:0.1f} °C')
 
-    # Note that values should be printed in celsius
+    # Add your time measurements here
+    time_total = time.time() - start_time
+    time_computations = t_2 - t_1 + t_4 - t_3 + t_6 - t_5 + t_8 - t_7 + t_10 - t_9
+    time_reading = time_total - time_computations
+    print(f'num workers: {args.num_workers}')
+    print(f'total time: {time_total:0.1f} s')
+    print(f'time reading: {time_reading:0.1f} s')
+    print(f'time computations: {time_computations:0.1f} s')
 
-    # Replace None with an appropriate expression
-    # Replace STATION, STATIONNAME, and TAVGDIFF with appropriate expressions
-
-    # print('Top 5 differences:')
-    # for row in df_decade_diff_sorted.limit(5).collect():
-    #     STATION = row['STATION']
-    #     STATIONNAME = row['NAME']
-    #     TAVGDIFF = row['DIFF']
-    #     print(f'{STATION} at {STATIONNAME} difference {TAVGDIFF:0.1f} °C)')
-
-    # # replace None with an appropriate expression
-    # print('Fraction of positive differences:')
-    # fraction_positive_diff = df_decade_diff_sorted.filter(col('DIFF') > 0).count() / df_decade_diff_sorted.filter(col('DIFF').isNotNull()).count()
-    # print(fraction_positive_diff)
-
-    # Five-number summary of temperature differences, replace with appropriate expressions
-    print('Five-number summary of decade average difference values:')
-    # Extract the DIFF column
-    decade_diff = df_decade_diff_sorted.select('DIFF').collect()
-    diff_values = [row['DIFF'] for row in decade_diff if row['DIFF'] is not None]
-    print(diff_values)
-    nr_rows = len(diff_values)
-    tdiff_max = diff_values[0]
-    tdiff_min = diff_values[-1]
-    tdiff_q1 = diff_values[3 * nr_rows // 4]
-    tdiff_median = diff_values[nr_rows // 2]
-    tdiff_q3 = diff_values[nr_rows // 4]
-    print(f'tdiff_min {tdiff_min:0.1f} °C')
-    print(f'tdiff_q1 {tdiff_q1:0.1f} °C')
-    print(f'tdiff_median {tdiff_median:0.1f} °C')
-    print(f'tdiff_q3 {tdiff_q3:0.1f} °C')
-    print(f'tdiff_max {tdiff_max:0.1f} °C')
-
-    # # Add your time measurements here
-    # # It may be interesting to also record more fine-grained times (e.g., how 
-    # # much time was spent computing vs. reading data)
-    # print(f'num workers: {args.num_workers}')
-    # print(f'total time: {None:0.1f} s')
