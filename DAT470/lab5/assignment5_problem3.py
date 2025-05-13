@@ -6,11 +6,14 @@ import os
 from pyspark import SparkContext, SparkConf
 import math
 import time
+import assignment5_problem1 as p1
+import assignment5_problem2 as p2
+import re
 
 def murmur3_32(key, seed):
     """Computes the 32-bit murmur3 hash"""
     # copy from Problem 1
-    raise NotImplementedError()
+    return p1.murmur3_32(key, seed)
 
 def auto_int(x):
     """Auxiliary function to help convert e.g. hex integers"""
@@ -21,7 +24,7 @@ def dlog2(n):
 
 def rho(n):
     # Copy from Problem 2
-    raise NotImplementedError()
+    return p2.rho(n)
 
 def compute_jr(key,seed,log2m):
     """hash the string key with murmur3_32, using the given seed
@@ -37,7 +40,7 @@ def compute_jr(key,seed,log2m):
     Return a tuple (j,r) of integers
     """
     # Copy from Problem 2
-    raise NotImplementedError()
+    return p2.compute_jr(key,seed,log2m)
 
 def get_files(path):
     """
@@ -59,7 +62,7 @@ def get_files(path):
 
 def alpha(m):
     """Auxiliary function: bias correction"""
-    raise NotImplementedError()
+    return 0.7212/(1+(1.079/m))
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(
@@ -98,11 +101,38 @@ if __name__ == '__main__':
     conf.set('spark.driver.memory', '16g')
     sc = SparkContext(conf=conf)
 
-    data = sc.parallelize(get_files(path))
+    data = sc.wholeTextFiles(path) \
+            .flatMap(lambda file: re.findall(r'\b\w+\b', file[1].lower()))
 
-    # Implement HyperLogLog here
 
-    E = None # replace with your own 
+    jrs = data.map(lambda x: compute_jr(x, seed, log2m))
+
+    max_r_per_j = jrs.reduceByKey(lambda a, b: max(a, b))
+
+    max_r_dict = dict(max_r_per_j.collect())
+
+    print(max_r_dict)
+
+    registers = [0] * m
+    for j, r in max_r_dict.items():
+        registers[j] = r
+
+    print(registers)
+    sum = 0
+    for r in registers:
+        sum += 2**(-r)
+
+    E = alpha(m) * m**2 * sum**-1
+
+    v_0 = 0
+    for r in registers:
+        if r == 0:
+            v_0 += 1
+
+    if E <= (5*m)/2 and v_0 > 0:
+        E = m * math.log(m/v_0)
+    elif E <= 1/30 * 2**32:
+        E = -2**32 * math.log(1 - (E / 2**32))
     
     end = time.time()
 
