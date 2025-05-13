@@ -24,9 +24,6 @@ if __name__ == '__main__':
     mean = np.mean(freq)
     stddev = np.std(freq)
 
-    # Calculate the number of collisions
-    # When computing collisions, if there are n keys that hash 
-    # to the same value, this induces (n choose 2) = n(n−1)/2 collisions.
     collisions = sum((count * (count - 1)) / 2 for count in counts.values())
     nr_pairs = sum(freq) * (sum(freq) - 1) / 2
     collision_prob = collisions / nr_pairs if nr_pairs > 0 else 0
@@ -35,4 +32,4 @@ if __name__ == '__main__':
     print(f"Mean: {mean}")
     print(f"Standard deviation: {stddev}")
     print(f"Total number of words: {sum(freq)}")
-    print(f"Collision probability: {collision_prob:.4f}")
+    print(f"Collision probability: {collision_prob:.6f}")
