@@ -8,12 +8,10 @@ import math
 import time
 import re
 
-def rol32(x,k):
-    """Auxiliary function (left rotation for 32-bit words)"""
-    return ((x << k) | (x >> (32-k))) & 0xffffffff
+def rol32(x, r):
+    return ((x << r) | (x >> (32 - r))) & 0xffffffff
 
-def murmur3_32(key, seed):
-    """Computes the 32-bit murmur3 hash"""
+def murmur3_32(key, seed=0):
     c1 = 0xcc9e2d51
     c2 = 0x1b873593
     r1 = 15
@@ -21,35 +19,44 @@ def murmur3_32(key, seed):
     m = 5
     n = 0xe6546b64
 
-    hash = seed
+    if isinstance(key, str):
+        key = key.encode('utf-8')  # Ensure we work with bytes
+
     length = len(key)
-    nblocks = length // 4
-    
-    for i in range(nblocks):
-        k = key[i*4:(i+1)*4]
-        k = int.from_bytes(k.encode('utf-8'), 'little')
+    hash = seed
+
+    # Body
+    for block_start in range(0, length // 4 * 4, 4):
+        k = int.from_bytes(key[block_start:block_start + 4], 'little')
         k = (k * c1) & 0xffffffff
         k = rol32(k, r1)
         k = (k * c2) & 0xffffffff
+
         hash ^= k
         hash = rol32(hash, r2)
         hash = (hash * m + n) & 0xffffffff
 
-    tail = key[nblocks*4:]
+    # Tail
+    tail = key[length // 4 * 4:]
+    k = 0
+    for i in range(len(tail)):
+        k |= tail[i] << (i * 8)
     if len(tail) > 0:
-        remaining = int.from_bytes(tail.encode('utf-8'), 'little')
-        remaining = (remaining * c1) & 0xffffffff
-        remaining = rol32(remaining, r1)
-        remaining = (remaining * c2) & 0xffffffff
-        hash ^= remaining
-    
+        k = (k * c1) & 0xffffffff
+        k = rol32(k, r1)
+        k = (k * c2) & 0xffffffff
+        hash ^= k
+
+    # Finalization
     hash ^= length
     hash ^= (hash >> 16)
     hash = (hash * 0x85ebca6b) & 0xffffffff
     hash ^= (hash >> 13)
     hash = (hash * 0xc2b2ae35) & 0xffffffff
     hash ^= (hash >> 16)
+
     return hash
+
 
 def auto_int(x):
     """Auxiliary function to help convert e.g. hex integers"""
@@ -61,14 +68,20 @@ def dlog2(n):
 def rho(n):
     """Given a 32-bit number n, return the 1-based position of the first
     1-bit"""
-    counter = 0
-    
-    while n & 0x100000000 == 0:
-        n = n << 1
-        counter += 1
+    if n == 0:
+        return 0
+    for i in range(32):
+        n = n >> 1
         if n == 0:
-            return 0
-    return counter
+            return 32 - i
+    # counter = 0
+    
+    # while n & 0x100000000 == 0:
+    #     if n == 0:
+    #         return counter
+    #     n = n << 1
+    #     counter += 1
+    # return counter
 
 def compute_jr(key,seed,log2m):
     """hash the string key with murmur3_32, using the given seed
@@ -120,6 +133,18 @@ def E_estimate(M, m):
     E = alpha(m) * m ** 2 / Z
     return E
 
+
+def split_into_words(text):
+    # Split on whitespace, dots, and commas (and other specified punctuation)
+    # \s matches any whitespace character
+    # [.,] matches either dot or comma
+    # | means OR in regex
+    # The + means "one or more occurrences"
+    words = re.split(r'[\s.,]+', text)
+    
+    # Remove any empty strings that might result from splitting
+    return [word for word in words if word]
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(
         description='Using HyperLogLog, computes the approximate number of '
@@ -158,15 +183,25 @@ if __name__ == '__main__':
     sc = SparkContext(conf=conf)
 
     data = sc.parallelize(get_files(path)) \
-        .flatMap(lambda text: re.findall(r'[a-z]+', text.lower()))
-        # .flatMap(lambda x: x.split())
-        # .flatMap(lambda text: re.findall(r'\b\w+\b', text.lower()))
+        .flatMap(lambda x: x.split())
+        # .flatMap(lambda text: re.findall(r"[a-zA-Z']+", text))
+        # .flatMap(lambda text: re.findall(r'\b\w+\b', text))
+        # .flatMap(lambda line: re.findall(r"[^\s]+", line))
+        # .flatMap(split_into_words)
+
+    num_distinct = data \
+                   .distinct() \
+                   .count()
+    print(f'Number of distinct words: {num_distinct}')
     
     jrs = data.map(lambda x: compute_jr(x, seed, log2m)) \
-        .reduceByKey(lambda a,b: max(a, b)) \
+        .reduceByKey(max) \
         .collect()
     
-    print(jrs)
+    # Print the list of (j,r) pairs
+    sorted_jrs = sorted(jrs, key=lambda x: x[0])
+    print(sorted_jrs)
+
     M = [0] * m
     for j, r in jrs:
         M[j] = max(M[j], r)
