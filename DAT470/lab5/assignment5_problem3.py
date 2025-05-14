@@ -24,7 +24,7 @@ def dlog2(n):
 
 def rho(n):
     # Copy from Problem 2
-    return p2.rho(n)
+    return p2.rhoRight(n)
 
 def compute_jr(key,seed,log2m):
     """hash the string key with murmur3_32, using the given seed
@@ -62,7 +62,7 @@ def get_files(path):
 
 def alpha(m):
     """Auxiliary function: bias correction"""
-    return 0.7212/(1+(1.079/m))
+    return 0.7213/(1+(1.079/m))
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(
@@ -101,23 +101,25 @@ if __name__ == '__main__':
     conf.set('spark.driver.memory', '16g')
     sc = SparkContext(conf=conf)
 
-    data = sc.wholeTextFiles(path) \
-            .flatMap(lambda file: re.findall(r'\b\w+\b', file[1].lower()))
+    data = sc.parallelize(get_files(path)) \
+            .flatMap(lambda x: x.split())
+                #.flatMap(lambda file: re.findall(r'\b\w+\b', file[1].lower()))
 
 
     jrs = data.map(lambda x: compute_jr(x, seed, log2m))
 
     max_r_per_j = jrs.reduceByKey(lambda a, b: max(a, b))
 
-    max_r_dict = dict(max_r_per_j.collect())
-
-    print(max_r_dict)
+    max_r = max_r_per_j.collect()
 
     registers = [0] * m
-    for j, r in max_r_dict.items():
+    for j, r in max_r:
         registers[j] = r
+    #registers = max_r_per_j.collectAsMap()
 
-    print(registers)
+    #print(registers)
+    #registers = [12,17,14,14,11,11,14,11,15,14,14,13,15,15,12,14]
+    #print(registers)
     sum = 0
     for r in registers:
         sum += 2**(-r)

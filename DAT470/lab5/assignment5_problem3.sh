@@ -7,7 +7,7 @@ conda activate pyspark
 # Positional arguments
 NUM_WORKERS="32"
 SEED="0x9747b28c"
-NUM_REGISTERS="16"
+NUM_REGISTERS="32768"
 
 SCRIPT="assignment5_problem3.py"
 FILEPATH="/data/courses/2025_dat470_dit066/gutenberg/tiny"

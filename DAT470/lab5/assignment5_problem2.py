@@ -32,6 +32,21 @@ def rho(n):
             return r
         r += 1
 
+
+def rhoRight(n):
+    """Given a 32-bit number n, return the 1-based position of the first
+    1-bit"""
+
+    r = 0
+    if (n == 0):
+        return 0
+    
+    while(n != 0):
+        n = n >> 1
+        r += 1
+        
+    return 32 - r
+
 def compute_jr(key,seed,log2m):
     """hash the string key with murmur3_32, using the given seed
     then take the **least significant** log2(m) bits as j
