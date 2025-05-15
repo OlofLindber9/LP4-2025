@@ -13,7 +13,7 @@ import re
 def murmur3_32(key, seed):
     """Computes the 32-bit murmur3 hash"""
     # copy from Problem 1
-    return p1.murmur3_32(key, seed)
+    return p1.murmur3_32_version2(key, seed)
 
 def auto_int(x):
     """Auxiliary function to help convert e.g. hex integers"""
@@ -62,7 +62,14 @@ def get_files(path):
 
 def alpha(m):
     """Auxiliary function: bias correction"""
-    return 0.7213/(1+(1.079/m))
+    if m == 16:
+        return 0.673
+    elif m == 32:
+        return 0.697
+    elif m == 64:
+        return 0.709
+    else:
+        return 0.7213 / (1 + 1.079 / m)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(

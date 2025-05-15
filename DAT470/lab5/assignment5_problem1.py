@@ -45,6 +45,51 @@ def murmur3_32(key, seed):
     hash ^= (hash >> 16)
     return hash
     
+def murmur3_32_version2(key, seed=0):
+    c1 = 0xcc9e2d51
+    c2 = 0x1b873593
+    r1 = 15
+    r2 = 13
+    m = 5
+    n = 0xe6546b64
+
+    if isinstance(key, str):
+        key = key.encode('utf-8')  # Ensure we work with bytes
+
+    length = len(key)
+    hash = seed
+
+    # Body
+    for block_start in range(0, length // 4 * 4, 4):
+        k = int.from_bytes(key[block_start:block_start + 4], 'little')
+        k = (k * c1) & 0xffffffff
+        k = rol32(k, r1)
+        k = (k * c2) & 0xffffffff
+
+        hash ^= k
+        hash = rol32(hash, r2)
+        hash = (hash * m + n) & 0xffffffff
+
+    # Tail
+    tail = key[length // 4 * 4:]
+    k = 0
+    for i in range(len(tail)):
+        k |= tail[i] << (i * 8)
+    if len(tail) > 0:
+        k = (k * c1) & 0xffffffff
+        k = rol32(k, r1)
+        k = (k * c2) & 0xffffffff
+        hash ^= k
+
+    # Finalization
+    hash ^= length
+    hash ^= (hash >> 16)
+    hash = (hash * 0x85ebca6b) & 0xffffffff
+    hash ^= (hash >> 13)
+    hash = (hash * 0xc2b2ae35) & 0xffffffff
+    hash ^= (hash >> 16)
+
+    return hash
 def auto_int(x):
     """Auxiliary function to help convert e.g. hex integers"""
     return int(x,0)
