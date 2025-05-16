@@ -7,53 +7,10 @@ from pyspark import SparkContext, SparkConf
 import math
 import time
 
-def rol32(x, r):
-    return ((x << r) | (x >> (32 - r))) & 0xffffffff
-
-def murmur3_32(key, seed=0):
+def murmur3_32(key, seed):
     """Computes the 32-bit murmur3 hash"""
-    c1 = 0xcc9e2d51
-    c2 = 0x1b873593
-    r1 = 15
-    r2 = 13
-    m = 5
-    n = 0xe6546b64
-
-    if isinstance(key, str):
-        key = key.encode('utf-8')
-
-    length = len(key)
-    hash = seed
-
-    for block_start in range(0, length // 4 * 4, 4):
-        k = int.from_bytes(key[block_start:block_start + 4], 'little')
-        k = (k * c1) & 0xffffffff
-        k = rol32(k, r1)
-        k = (k * c2) & 0xffffffff
-
-        hash ^= k
-        hash = rol32(hash, r2)
-        hash = (hash * m + n) & 0xffffffff
-
-    tail = key[length // 4 * 4:]
-    k = 0
-    for i in range(len(tail)):
-        k |= tail[i] << (i * 8)
-    if len(tail) > 0:
-        k = (k * c1) & 0xffffffff
-        k = rol32(k, r1)
-        k = (k * c2) & 0xffffffff
-        hash ^= k
-
-    hash ^= length
-    hash ^= (hash >> 16)
-    hash = (hash * 0x85ebca6b) & 0xffffffff
-    hash ^= (hash >> 13)
-    hash = (hash * 0xc2b2ae35) & 0xffffffff
-    hash ^= (hash >> 16)
-
-    return hash
-
+    # copy from Problem 1
+    raise NotImplementedError()
 
 def auto_int(x):
     """Auxiliary function to help convert e.g. hex integers"""
@@ -63,16 +20,8 @@ def dlog2(n):
     return n.bit_length() - 1
 
 def rho(n):
-    """Given a 32-bit number n, return the 1-based position of the first
-    1-bit"""
-    counter = 0
-    
-    while n & 0x100000000 == 0:
-        if n == 0:
-            return counter
-        n = n << 1
-        counter += 1
-    return counter
+    # Copy from Problem 2
+    raise NotImplementedError()
 
 def compute_jr(key,seed,log2m):
     """hash the string key with murmur3_32, using the given seed
@@ -87,10 +36,8 @@ def compute_jr(key,seed,log2m):
 
     Return a tuple (j,r) of integers
     """
-    h = murmur3_32(key,seed)
-    j = ~(0xffffffff << log2m) & h
-    r = rho(h)
-    return j, r
+    # Copy from Problem 2
+    raise NotImplementedError()
 
 def get_files(path):
     """
@@ -112,21 +59,7 @@ def get_files(path):
 
 def alpha(m):
     """Auxiliary function: bias correction"""
-    if m == 16:
-        return 0.673
-    elif m == 32:
-        return 0.697
-    elif m == 64:
-        return 0.709
-    else:
-        return 0.7213 / (1 + 1.079 / m)
-
-def E_estimate(M, m):
-    """Estimate the cardinality of the set using the HyperLogLog algorithm
-    and the bias correction factor alpha(m)"""
-    Z = math.fsum([1.0 / (1 << mj) for mj in M])
-    E = alpha(m) * m * m / Z
-    return E
+    raise NotImplementedError()
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(
@@ -162,34 +95,22 @@ if __name__ == '__main__':
     start = time.time()
     conf = SparkConf()
     conf.setMaster(f'local[{num_workers}]')
-    conf.set('spark.driver.memory', '64g')
+    conf.set('spark.driver.memory', '16g')
     sc = SparkContext(conf=conf)
 
-    data = sc.parallelize(get_files(path)) \
-        .flatMap(lambda x: x.split())
+    data = sc.parallelize(get_files(path))
+
+    # Implement HyperLogLog here
+
+    E = None # replace with your own 
     
-    jrs = data.map(lambda x: compute_jr(x, seed, log2m)) \
-        .reduceByKey(max) \
-        .collect()
-
-    M = [0] * m
-    for j, r in jrs:
-        M[j] = max(M[j], r)
-
-    # Compute cardinality estimate
-    E = E_estimate(M, m)
-
-    # Count zero entries in M
-    Z = M.count(0)
-
-    # Bias Correction
-    if E <= (5 / 2) * m and Z > 0:
-        E = m * math.log(m / Z)
-    elif E > (1 / 30) * (2 ** 32):
-        E = -(2 ** 32) * math.log(1 - E / (2 ** 32))
-        
     end = time.time()
 
     print(f'Cardinality estimate: {E}')
     print(f'Number of workers: {num_workers}')
     print(f'Took {end-start} s')
+
+    
+    
+
+    

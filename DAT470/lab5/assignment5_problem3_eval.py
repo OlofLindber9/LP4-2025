@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 
 import argparse
+import random
+import statistics
 import sys
 import os
 from pyspark import SparkContext, SparkConf
@@ -11,7 +13,6 @@ def rol32(x, r):
     return ((x << r) | (x >> (32 - r))) & 0xffffffff
 
 def murmur3_32(key, seed=0):
-    """Computes the 32-bit murmur3 hash"""
     c1 = 0xcc9e2d51
     c2 = 0x1b873593
     r1 = 15
@@ -20,11 +21,12 @@ def murmur3_32(key, seed=0):
     n = 0xe6546b64
 
     if isinstance(key, str):
-        key = key.encode('utf-8')
+        key = key.encode('utf-8')  # Ensure we work with bytes
 
     length = len(key)
     hash = seed
 
+    # Body
     for block_start in range(0, length // 4 * 4, 4):
         k = int.from_bytes(key[block_start:block_start + 4], 'little')
         k = (k * c1) & 0xffffffff
@@ -35,6 +37,7 @@ def murmur3_32(key, seed=0):
         hash = rol32(hash, r2)
         hash = (hash * m + n) & 0xffffffff
 
+    # Tail
     tail = key[length // 4 * 4:]
     k = 0
     for i in range(len(tail)):
@@ -45,6 +48,7 @@ def murmur3_32(key, seed=0):
         k = (k * c2) & 0xffffffff
         hash ^= k
 
+    # Finalization
     hash ^= length
     hash ^= (hash >> 16)
     hash = (hash * 0x85ebca6b) & 0xffffffff
@@ -128,22 +132,38 @@ def E_estimate(M, m):
     E = alpha(m) * m * m / Z
     return E
 
+def print_estimates(estimates):
+    # Bin width
+    bin_width = 8
+
+    # Create histogram bins
+    histogram = {}
+    for est in estimates:
+        bin_start = (int(est) // bin_width) * bin_width
+        histogram[bin_start] = histogram.get(bin_start, 0) + 1
+
+    # Sort and print bins
+    sorted_bins = sorted(histogram.items())
+    print(f"\nHistogram bins (width {bin_width}):")
+    print("[")
+    for bin_start, count in sorted_bins:
+        print(f"  ({bin_start}, {count}),")
+    print("]")
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(
         description='Using HyperLogLog, computes the approximate number of '
-            'distinct words in all .txt files under the given path.'
+                    'distinct words in all .txt files under the given path.'
     )
-    parser.add_argument('path',help='path to walk',type=str)
-    parser.add_argument('-s','--seed',type=auto_int,default=0,help='seed value')
-    parser.add_argument('-m','--num-registers',type=int,required=True,
-                            help=('number of registers (must be a power of two)'))
-    parser.add_argument('-w','--num-workers',type=int,default=1,
+    parser.add_argument('path', help='path to walk', type=str)
+    parser.add_argument('-m', '--num-registers', type=int, required=True,
+                        help='number of registers (must be a power of two)')
+    parser.add_argument('-w', '--num-workers', type=int, default=1,
                         help='number of Spark workers')
     args = parser.parse_args()
 
-    seed = args.seed
     m = args.num_registers
-    if m <= 0 or (m&(m-1)) != 0:
+    if m <= 0 or (m & (m - 1)) != 0:
         sys.stderr.write(f'{sys.argv[0]}: m must be a positive power of 2\n')
         quit(1)
     log2m = dlog2(m)
@@ -159,37 +179,58 @@ if __name__ == '__main__':
         sys.stderr.write(f"{sys.argv[0]}: `{path}' is not a valid directory\n")
         quit(1)
 
+    true_cardinality = 284689
+    sigma = 1.04 / math.sqrt(m)
+
     start = time.time()
     conf = SparkConf()
     conf.setMaster(f'local[{num_workers}]')
     conf.set('spark.driver.memory', '64g')
     sc = SparkContext(conf=conf)
 
-    data = sc.parallelize(get_files(path)) \
-        .flatMap(lambda x: x.split())
-    
-    jrs = data.map(lambda x: compute_jr(x, seed, log2m)) \
-        .reduceByKey(max) \
-        .collect()
+    # Load and cache the data once
+    data = sc.parallelize(get_files(path)).flatMap(lambda x: x.split()).cache()
+    words = data.collect()
 
-    M = [0] * m
-    for j, r in jrs:
-        M[j] = max(M[j], r)
+    # Generate 1000 random seeds
+    seeds = [random.randint(0, 0xffffffff) for _ in range(1000)]
+    seed_rdd = sc.parallelize(seeds, num_workers)
 
-    # Compute cardinality estimate
-    E = E_estimate(M, m)
+    def estimate_from_seed(seed):
+        M = [0] * m
+        for word in words:
+            j, r = compute_jr(word, seed, log2m)
+            M[j] = max(M[j], r)
 
-    # Count zero entries in M
-    Z = M.count(0)
+        E = E_estimate(M, m)
+        Z = M.count(0)
 
-    # Bias Correction
-    if E <= (5 / 2) * m and Z > 0:
-        E = m * math.log(m / Z)
-    elif E > (1 / 30) * (2 ** 32):
-        E = -(2 ** 32) * math.log(1 - E / (2 ** 32))
-        
+        if E <= (5 / 2) * m and Z > 0:
+            E = m * math.log(m / Z)
+        elif E > (1 / 30) * (2 ** 32):
+            E = -(2 ** 32) * math.log(1 - E / (2 ** 32))
+
+        return E
+
+    # Parallel HLL estimation
+    estimates = seed_rdd.map(estimate_from_seed).collect()
+
+    sc.stop()
     end = time.time()
 
-    print(f'Cardinality estimate: {E}')
+    avg = statistics.mean(estimates)
+    std = statistics.stdev(estimates)
+
+    print(f'Average estimate: {avg:.2f}')
+    print(f'Standard deviation: {std:.2f}')
+
+    for k in [1, 2, 3]:
+        lower = true_cardinality * (1 - k * sigma)
+        upper = true_cardinality * (1 + k * sigma)
+        count = sum(lower <= est <= upper for est in estimates)
+        fraction = count / 1000
+        print(f'Fraction within n (1 +/- {k} sigma: {fraction:.3f}')
+    print_estimates(estimates)
+
     print(f'Number of workers: {num_workers}')
-    print(f'Took {end-start} s')
+    print(f'Total time: {end - start:.2f} seconds')

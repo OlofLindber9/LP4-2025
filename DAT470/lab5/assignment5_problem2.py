@@ -8,7 +8,7 @@ def rol32(x,k):
     """Auxiliary function (left rotation for 32-bit words)"""
     return ((x << k) | (x >> (32-k))) & 0xffffffff
 
-def murmur3_32(key, seed):
+def murmur3_32(key, seed=0):
     """Computes the 32-bit murmur3 hash"""
     c1 = 0xcc9e2d51
     c2 = 0x1b873593
@@ -17,34 +17,39 @@ def murmur3_32(key, seed):
     m = 5
     n = 0xe6546b64
 
-    hash = seed
+    if isinstance(key, str):
+        key = key.encode('utf-8')
+
     length = len(key)
-    nblocks = length // 4
-    
-    for i in range(nblocks):
-        k = key[i*4:(i+1)*4]
-        k = int.from_bytes(k.encode('utf-8'), 'little')
+    hash = seed
+
+    for block_start in range(0, length // 4 * 4, 4):
+        k = int.from_bytes(key[block_start:block_start + 4], 'little')
         k = (k * c1) & 0xffffffff
         k = rol32(k, r1)
         k = (k * c2) & 0xffffffff
+
         hash ^= k
         hash = rol32(hash, r2)
         hash = (hash * m + n) & 0xffffffff
 
-    tail = key[nblocks*4:]
+    tail = key[length // 4 * 4:]
+    k = 0
+    for i in range(len(tail)):
+        k |= tail[i] << (i * 8)
     if len(tail) > 0:
-        remaining = int.from_bytes(tail.encode('utf-8'), 'little')
-        remaining = (remaining * c1) & 0xffffffff
-        remaining = rol32(remaining, r1)
-        remaining = (remaining * c2) & 0xffffffff
-        hash ^= remaining
-    
+        k = (k * c1) & 0xffffffff
+        k = rol32(k, r1)
+        k = (k * c2) & 0xffffffff
+        hash ^= k
+
     hash ^= length
     hash ^= (hash >> 16)
     hash = (hash * 0x85ebca6b) & 0xffffffff
     hash ^= (hash >> 13)
     hash = (hash * 0xc2b2ae35) & 0xffffffff
     hash ^= (hash >> 16)
+
     return hash
 
 
