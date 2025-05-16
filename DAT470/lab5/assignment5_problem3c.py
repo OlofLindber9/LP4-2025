@@ -7,6 +7,7 @@ from pyspark import SparkContext, SparkConf
 import math
 import time
 import re
+import random
 
 def rol32(x, r):
     return ((x << r) | (x >> (32 - r))) & 0xffffffff
@@ -158,7 +159,6 @@ if __name__ == '__main__':
                         help='number of Spark workers') 
     args = parser.parse_args()
 
-    seed = args.seed
     m = args.num_registers
     if m <= 0 or (m&(m-1)) != 0:
         sys.stderr.write(f'{sys.argv[0]}: m must be a positive power of 2\n')
@@ -168,7 +168,7 @@ if __name__ == '__main__':
     num_workers = args.num_workers
     if num_workers < 1:
         sys.stderr.write(f'{sys.argv[0]}: must have a positive number of '
-                         'workers\n')
+                        'workers\n')
         quit(1)
 
     path = args.path
@@ -176,54 +176,73 @@ if __name__ == '__main__':
         sys.stderr.write(f"{sys.argv[0]}: `{path}' is not a valid directory\n")
         quit(1)
 
+    print("before SPARK init")
     start = time.time()
     conf = SparkConf()
     #conf.setMaster(f'local[{num_workers}]')
     conf.set('spark.driver.memory', '128g')
     sc = SparkContext(conf=conf)
-
     data = sc.parallelize(get_files(path)) \
-        .flatMap(lambda x: x.split()).cache()
-        # .flatMap(lambda text: re.findall(r"[a-zA-Z']+", text))
-        # .flatMap(lambda text: re.findall(r'\b\w+\b', text))
-        # .flatMap(lambda line: re.findall(r"[^\s]+", line))
-        # .flatMap(split_into_words)
+    .flatMap(lambda x: x.split()).cache()
 
-    #data = sc.textFile(path).flatMap(lambda line: line.split()).cache()
+    print("after SPARK init")
+    seeds = []
+    estimates = []
 
-    #num_distinct = data \
-    #               .distinct() \
-    #               .count()
-    #print(f'Number of distinct words: {num_distinct}')
-    
-    jrs = data.map(lambda x: compute_jr(x, seed, log2m)) \
-            .map(lambda jr: (jr[0], jr[1])) \
-            .reduceByKey(max) \
-            .collect()
+    for _ in range(1000):
+        num = random.randint(0, 0xFFFFFFFF)
+        seeds.append(num)
+    count = 0
+    for seed in seeds:
+            # .flatMap(lambda text: re.findall(r"[a-zA-Z']+", text))
+            # .flatMap(lambda text: re.findall(r'\b\w+\b', text))
+            # .flatMap(lambda line: re.findall(r"[^\s]+", line))
+            # .flatMap(split_into_words)
 
-    
-    # Print the list of (j,r) pairs
-    #sorted_jrs = sorted(jrs, key=lambda x: x[0])
-    #print(sorted_jrs)
+        #data = sc.textFile(path).flatMap(lambda line: line.split()).cache()
 
-    M = [0] * m
-    for j, r in jrs:
-        M[j] = max(M[j], r)
+        #num_distinct = data \
+        #               .distinct() \
+        #               .count()
+        #print(f'Number of distinct words: {num_distinct}')
+        print("job started")
+        sys.stdout.flush()
+        print(count)
+        jrs = data.map(lambda x: compute_jr(x, seed, log2m)) \
+                .map(lambda jr: (jr[0], jr[1])) \
+                .reduceByKey(max) \
+                .collect()
 
-    # Compute cardinality estimate
-    E = E_estimate(M, m)
-
-    # Count zero entries in M
-    Z = M.count(0)
-
-    # Bias Correction
-    if E <= (5 / 2) * m and Z > 0:
-        E = m * math.log(m / Z)
-    elif E > (1 / 30) * (2 ** 32):
-        E = -(2 ** 32) * math.log(1 - E / (2 ** 32))
         
-    end = time.time()
+        # Print the list of (j,r) pairs
+        #sorted_jrs = sorted(jrs, key=lambda x: x[0])
+        #print(sorted_jrs)
 
-    print(f'Cardinality estimate: {E}')
-    print(f'Number of workers: {num_workers}')
-    print(f'Took {end-start} s')
+        M = [0] * m
+        for j, r in jrs:
+            M[j] = max(M[j], r)
+
+        # Compute cardinality estimate
+        E = E_estimate(M, m)
+
+        # Count zero entries in M
+        Z = M.count(0)
+
+        # Bias Correction
+        if E <= (5 / 2) * m and Z > 0:
+            E = m * math.log(m / Z)
+        elif E > (1 / 30) * (2 ** 32):
+            E = -(2 ** 32) * math.log(1 - E / (2 ** 32))
+            
+        end = time.time()
+
+        estimates.append(E)
+
+        print(count)
+        sys.stdout.flush()
+        count += 1
+        
+        #print(f'Cardinality estimate: {E}')
+        #print(f'Number of workers: {num_workers}')
+        #print(f'Took {end-start} s')
+    print(estimates)
