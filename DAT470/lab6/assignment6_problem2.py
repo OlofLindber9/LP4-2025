@@ -29,6 +29,7 @@ def normalize(X):
     Implement this function using array operations! No loops allowed.
     """
     norms = np.linalg.norm(X, axis=1, keepdims=True)
+    norms[norms == 0] = 1
     X_normalized = X / norms
     return X_normalized
 
@@ -60,7 +61,6 @@ if __name__ == '__main__':
 
     t1 = time.time()
 
-    # Calculate the cosine similarity between Q and X (already normalized)
     S = np.dot(Q, X.T)
 
     t2 = time.time()

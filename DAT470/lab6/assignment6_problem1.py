@@ -29,6 +29,7 @@ def normalize(X):
     Implement this function using array operations! No loops allowed.
     """
     norms = np.linalg.norm(X, axis=1, keepdims=True)
+    norms[norms == 0] = 1
     X_normalized = X / norms
     return X_normalized
     

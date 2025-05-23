@@ -135,15 +135,12 @@ class LocalitySensitiveHashing:
         """
         self._X = X
         self._random_hyperplanes.fit(X)
-        # Project the dataset into binary vectors
         binary_vectors = self._random_hyperplanes.transform(X)
 
         self._H = [dict() for _ in range(self._L)]
         for i in range(self._L):
             for j in range(binary_vectors.shape[0]):
-                # Get the hash value for the current binary vector
                 hash_value = tuple(binary_vectors[j, self._hash_functions[i]])
-                # Add the index to the corresponding hash table
                 if hash_value not in self._H[i]:
                     self._H[i][hash_value] = set()
                 self._H[i][hash_value].add(j)
@@ -192,9 +189,10 @@ if __name__ == '__main__':
                             type=str)
     parser.add_argument('queries', help='Queries filename', type=str)
     args = parser.parse_args()
-    
-    (word_to_idx, idx_to_word, X) = load_glove(args.dataset)
 
+    t0 = time.time()
+
+    (word_to_idx, idx_to_word, X) = load_glove(args.dataset)
 
     X = normalize(X)
 
@@ -214,10 +212,12 @@ if __name__ == '__main__':
         neighbors.append([idx_to_word[i] for i in I][1:4])
     t4 = time.time()
 
+    print('load took',t1-t0)
     print('init took',t2-t1)
     print('fit took', t3-t2)
     print('query took', t4-t3)
     print('total',t4-t1)
+    print(f"Hyperparameters: D = {args.D}, k = {args.k}, L = {args.L}")
 
     for i in range(Q.shape[0]):
         print(f'{queries[i]}: {" ".join(neighbors[i])}') 
