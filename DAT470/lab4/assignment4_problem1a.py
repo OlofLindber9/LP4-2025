@@ -31,27 +31,27 @@ if __name__ == '__main__':
     lines = sc.textFile(args.filename)
 
     # Parse the input data
-    lines = lines.map(parse_line)
+    followed = lines.map(parse_line).cache()
 
-    # Calculate the maximum number of people followed
-    # and the id of the account with the maximum number of people followed
-    max_followed = lines.sortBy(lambda x: x[1], ascending=False).first()
-    max_followed_id = max_followed[0]
-    max_followed_count = max_followed[1]
-    # id of the account with the maximum number of people followed
-    # the average number of people followed
-    total_followers = lines.map(lambda x: x[1]).reduce(lambda x, y: x + y)
-    count = lines.count()
-    average_followers = total_followers / count if count > 0 else 0
-    #  the number of accounts that follow no-one
-    count_no_followers = lines.filter(lambda x: x[1] == 0).count()    
+    # Calculate the user who follows the most people
+    max_followed = followed.reduce(lambda x, y: x if x[1] >= y[1] else y)
+    
+    # Calculate the average number of people followed
+    (sum_followed, total_users) = followed.aggregate((0, 0),
+        lambda acc, x: (acc[0] + x[1], acc[1] + 1),
+        lambda acc1, acc2: (acc1[0] + acc2[0], acc1[1] + acc2[1])
+    )
+    average_followed = sum_followed / total_users if total_users > 0 else 0
+
+    # Calculate the number of accounts that follow no-one
+    count_no_followed = followed.filter(lambda x: x[1] == 0).count()
+
     end = time.time()
     
     total_time = end - start
 
-    print(f'max followers: {max_followed_id} has {max_followed_count} followers')
-    print(f'followers on average: {average_followers}')
-    print(f'number of user with no followers: {count_no_followers}')
+    print(f'max follows: {max_followed[0]} follows {max_followed[1]}')
+    print(f'users follow on average: {average_followed}')
+    print(f'number of user who follow no-one: {count_no_followed}')
     print(f'num workers: {args.num_workers}')
     print(f'total time: {total_time} seconds')
-

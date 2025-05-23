@@ -28,11 +28,11 @@ def normalize(X):
     
     Implement this function using array operations! No loops allowed.
     """
-
-    norms = np.linalg.norm(X,axis=1,keepdims=True)
-    normalized_X = X / norms
-    
-    return normalized_X
+    # Compute the L2 norm of each row
+    norms = np.linalg.norm(X, axis=1, keepdims=True)
+    # Normalize each row by dividing by its L2 norm
+    X_normalized = X / norms
+    return X_normalized
     
 
 if __name__ == '__main__':
@@ -48,4 +48,5 @@ if __name__ == '__main__':
 
     end = time.time()
 
-    print(end - start)
+    print(f"Time to normalize the dataset {args.dataset}:")
+    print(f"{end - start} seconds.")

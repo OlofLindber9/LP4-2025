@@ -15,7 +15,7 @@ def parse_line(line):
     fields = line.split(':')
     user_id = fields[0]
     following = [f for f in fields[1].split(' ') if f.strip()]
-    return (user_id,following)
+    return (user_id, following)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description = \
@@ -47,10 +47,8 @@ if __name__ == '__main__':
     
     total_time = end - start
 
-    # the first ??? should be the twitter id
     print(f'max followers: {max_followers[0]} has {max_followers[1]} followers')
     print(f'followers on average: {average_followers}')
     print(f'number of user with no followers: {count_no_followers}')
     print(f'num workers: {args.num_workers}')
-    print(f'total time: {total_time}')
-
+    print(f'total time: {total_time} seconds')
