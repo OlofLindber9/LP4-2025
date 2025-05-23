@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import numpy as np
+import numpy.typing as npt
 import pandas as pd
 import csv
 import argparse
@@ -29,10 +30,10 @@ def normalize(X):
     
     Implement this function using array operations! No loops allowed.
     """
-    norms = np.linalg.norm(X,axis=1,keepdims=True)
-    normalized_X = X / norms
-    
-    return normalized_X
+    norms = np.linalg.norm(X, axis=1, keepdims=True)
+    norms[norms == 0] = 1
+    X_normalized = X / norms
+    return X_normalized
 
 def construct_queries(queries_fn, word_to_idx, X):
     """
@@ -62,7 +63,6 @@ class RandomHyperplanes:
         """
         self._D = D
         self._seed = seed
-        self.R = None
 
     def fit(self, X):
         """
@@ -71,25 +71,19 @@ class RandomHyperplanes:
         columns) of X
         """
         rng = np.random.default_rng(self._seed)
-        d = X.shape[1]
-        
-        self.R = rng.normal(size=(self._D, d))
-        
-        norms = np.linalg.norm(self.R, axis=1, keepdims=True)
-        self.R = self.R / norms
-
-        return self.R
+        self._R = rng.normal(size=(self._D, X.shape[1]))
+        self._R = normalize(self._R)
 
     def transform(self, X):
         """
         Project the rows of X into binary vectors
         """
-        X_prime = X @ self.R.T
-        
-        signs = np.sign(X_prime)
-        X_dprime = (signs > 0).astype(int)
-        return X_dprime
-
+        # Compute the dot product of X with the random hyperplanes
+        projections = np.dot(X, self._R.T)
+        # Convert to binary values based on the sign of the projections
+        binary_vectors = np.where(projections > 0, 1, 0)
+        return binary_vectors
+    
     def fit_transform(self, X):
         """
         Calls fit() followed by transform()
@@ -126,16 +120,12 @@ class LocalitySensitiveHashing:
         self._k = k
         self._L = L
         rng = np.random.default_rng(seed)
-        self._random_hyperplanes = RandomHyperplanes(D=D, seed=seed)
-        self._hash_functions = self._rng.integers(
-            low=0, 
-            high=self._D, 
-            size=(self._L, self._k)
-        )
         # draw the hash functions here
         # (essentially, draw a random matrix of shape L*k with values in
         # 0,1,...,D-1)
+        self._hash_functions = rng.integers(low=0, high=D, size=(L,k))
         # also initialize the random hyperplanes
+        self._random_hyperplanes = RandomHyperplanes(D, seed)
 
     def fit(self, X: npt.NDArray[np.float64])->None:
         """
@@ -144,23 +134,19 @@ class LocalitySensitiveHashing:
         Then hash the dataset L times into the L hash tables
         """
         self._X = X
-        self._X_binary = self._random_hyperplanes.fit_transform(X)
+        self._random_hyperplanes.fit(X)
+        # Project the dataset into binary vectors
+        binary_vectors = self._random_hyperplanes.transform(X)
 
-                # Initialize L hash tables (dictionaries)
         self._H = [dict() for _ in range(self._L)]
-        
-        # Hash each point into each table
-        for idx in range(X.shape[0]):
-            binary_vec = self._X_binary[idx]
-            for table_idx in range(self._L):
-                hp_indices = self._hash_functions[table_idx]
-                key = tuple(binary_vec[hp_indices])
-                
-                # Add to hash table
-                if key not in self._H[table_idx]:
-                    self._H[table_idx][key] = set()
-                self._H[table_idx][key].add(idx)
-
+        for i in range(self._L):
+            for j in range(binary_vectors.shape[0]):
+                # Get the hash value for the current binary vector
+                hash_value = tuple(binary_vectors[j, self._hash_functions[i]])
+                # Add the index to the corresponding hash table
+                if hash_value not in self._H[i]:
+                    self._H[i][hash_value] = set()
+                self._H[i][hash_value].add(j)
 
     def query(self, q: npt.NDArray[np.float64])->npt.NDArray[np.int64]:
         """
@@ -170,14 +156,30 @@ class LocalitySensitiveHashing:
         neighbor (if the vector was member of the dataset, then typically 
         this would be itself), X[I[1]] the second nearest etc.
         """
-        raise NotImplementedError()
-
         # Project the query into a binary vector
-        # Then hash it L times
-        # Collect all indices from the hash buckets
-        # Then compute the dot products with those vectors
-        # Finally sort results in *descending* order and return the indices
+        query_vector = q.reshape(1, -1)
+        binary_vector = self._random_hyperplanes.transform(query_vector)[0]
 
+        # Then hash it L times
+        q_hash_values = [tuple(binary_vector[self._hash_functions[i]]) for i in range(self._L)]
+
+        # Collect all indices from the hash buckets
+        indices = set()
+        for i in range(self._L):
+            if q_hash_values[i] in self._H[i]:
+                indices.update(self._H[i][q_hash_values[i]])
+        
+        # Then compute the dot products with those vectors
+        if not indices:
+            return np.array([], dtype=np.int64)
+        indices = list(indices)
+        X_candidates = self._X[indices]
+        dot_products = np.dot(X_candidates, query_vector.reshape(-1))
+
+        # Finally sort results in *descending* order and return the indices
+        sorted_indices = np.argsort(-dot_products)
+        return np.array([indices[i] for i in sorted_indices], dtype=np.int64)
+    
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('-D', help='Random hyperplanes dimension', type=int,

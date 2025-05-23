@@ -28,10 +28,9 @@ def normalize(X):
     
     Implement this function using array operations! No loops allowed.
     """
-    norms = np.linalg.norm(X,axis=1,keepdims=True)
-    normalized_X = X / norms
-    
-    return normalized_X
+    norms = np.linalg.norm(X, axis=1, keepdims=True)
+    X_normalized = X / norms
+    return X_normalized
 
 def construct_queries(queries_fn, word_to_idx, X):
     """
@@ -55,39 +54,27 @@ if __name__ == '__main__':
     
     (word_to_idx, idx_to_word, X) = load_glove(args.dataset)
 
-
     X = normalize(X)
 
     (Q,queries) = construct_queries(args.queries, word_to_idx, X)
 
     t1 = time.time()
 
-    #matrix multiplication
-    similarities = np.matmul(Q, X.T)
-    
+    # Calculate the cosine similarity between Q and X (already normalized)
+    S = np.dot(Q, X.T)
+
     t2 = time.time()
+
     # Compute here I such that I[i,:] contains the indices of the nearest
     # neighbors of the word i in ascending order.
     # Naturally, I[i,-1] should then be the index of the word itself.
 
-    all_sorted = np.argsort(-similarities, axis=1)
+    I = np.argsort(S, axis=1)
     
-    I = np.zeros((len(queries), X.shape[0]), dtype=int)
-    for i, query in enumerate(queries):
-        # Find where the word itself appears in the sorted list
-        self_idx = np.where(all_sorted[i] == word_to_idx[query])[0][0]
-        
-        other_indices = np.delete(all_sorted[i], self_idx)
-        
-        I[i,:-1] = other_indices[:X.shape[0]-1]
-        I[i,-1] = word_to_idx[query]
-
-
     t3 = time.time()
     
     for i in range(I.shape[0]):
-        top3_indices = I[i, :3]
-        neighbors = [idx_to_word[idx] for idx in top3_indices]
+        neighbors = [idx_to_word[i] for i in I[i,-2:-5:-1]]
         print(f'{queries[i]}: {" ".join(neighbors)}')
 
     print('matrix multiplication took', t2-t1)

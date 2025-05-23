@@ -28,10 +28,9 @@ def normalize(X):
     
     Implement this function using array operations! No loops allowed.
     """
-    norms = np.linalg.norm(X,axis=1,keepdims=True)
-    normalized_X = X / norms
-    
-    return normalized_X
+    norms = np.linalg.norm(X, axis=1, keepdims=True)
+    X_normalized = X / norms
+    return X_normalized
 
 def construct_queries(queries_fn, word_to_idx, X):
     """
@@ -61,7 +60,6 @@ class RandomHyperplanes:
         """
         self._D = D
         self._seed = seed
-        self.R = None
 
     def fit(self, X):
         """
@@ -70,24 +68,19 @@ class RandomHyperplanes:
         columns) of X
         """
         rng = np.random.default_rng(self._seed)
-        
-        d = X.shape[1]
-        
-        self.R = rng.normal(size=(self._D, d))
-        
-        norms = np.linalg.norm(self.R, axis=1, keepdims=True)
-        self.R = self.R / norms
-
+        self._R = rng.normal(size=(self._D, X.shape[1]))
+        self._R = normalize(self._R)
+    
     def transform(self, X):
         """
         Project the rows of X into binary vectors
         """
-        X_prime = X @ self.R.T
-        
-        signs = np.sign(X_prime)
-        X_dprime = (signs > 0).astype(int)
-        return X_dprime
-
+        # Compute the dot product of X with the random hyperplanes
+        projections = np.dot(X, self._R.T)
+        # Convert to binary values based on the sign of the projections
+        binary_vectors = np.where(projections > 0, 1, 0)
+        return binary_vectors
+    
     def fit_transform(self, X):
         """
         Calls fit() followed by transform()
@@ -106,7 +99,6 @@ if __name__ == '__main__':
     
     (word_to_idx, idx_to_word, X) = load_glove(args.dataset)
 
-
     X = normalize(X)
 
     (Q,queries) = construct_queries(args.queries, word_to_idx, X)
@@ -119,4 +111,5 @@ if __name__ == '__main__':
 
     end = time.time()
 
-    print(end-start)
+    print(f"Time to transform the dataset {args.dataset}:")
+    print(f"{end-start} seconds.")
