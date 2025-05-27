@@ -24,12 +24,12 @@ def linear_scan(X, Q, b):
         # Compute the differences
         D = Q_batch[:, np.newaxis, :] - X[np.newaxis, :, :]
         
-        # Compute the squared Euclidean distances
-        D_sq = np.sum(D**2, axis=-1)
+        # Compute the Euclidean norm along the last axis of D
+        D_norm = np.linalg.norm(D, axis=-1)
         
         # Find the indices of the minimum distances
-        I[i:i+b] = np.argmin(D_sq, axis=1)
-    return I.astype(np.int32)
+        I[i:i+b] = np.argmin(D_norm, axis=1)
+    return I
 
 def load_glove(fn):
     """
@@ -83,7 +83,7 @@ if __name__ == '__main__':
         help = 'Optional correct query labels; if provided, the correctness '
         'of returned results is checked')
     parser.add_argument(
-        '-b', '--batch-size', type=int, required=False, default=1000,
+        '-b', '--batch-size', type=int, required=False, default=100,
         help = 'Size of batches')
     args = parser.parse_args()
 
