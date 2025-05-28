@@ -83,7 +83,7 @@ if __name__ == '__main__':
         help = 'Optional correct query labels; if provided, the correctness '
         'of returned results is checked')
     parser.add_argument(
-        '-b', '--batch-size', type=int, required=False, default=1000,
+        '-b', '--batch-size', type=int, required=False,
         help = 'Size of batches')
     args = parser.parse_args()
 

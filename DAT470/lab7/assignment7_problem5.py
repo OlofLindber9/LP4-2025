@@ -58,6 +58,9 @@ if __name__ == '__main__':
         '-l', '--labels', type=str, required=False,
         help = 'Optional correct query labels; if provided, the correctness '
         'of returned results is checked')
+    parser.add_argument(
+        '-b', '--batch-size', type=int, required=False,
+        help = 'Size of batches')
     args = parser.parse_args()
 
     t1 = time.time()
