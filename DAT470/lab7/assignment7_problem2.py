@@ -5,7 +5,6 @@ import csv
 import sys
 import time
 import cupy as cp
-import gc
 
 def linear_scan(X, Q, b):
     """
@@ -21,6 +20,7 @@ def linear_scan(X, Q, b):
     I = cp.zeros(m, dtype=cp.int32)
     for i in range(0, m, b):
         end = min(i + b, m)
+
         # Get the current batch of queries
         Q_batch = Q[i:end]        
         
@@ -87,7 +87,7 @@ if __name__ == '__main__':
         help = 'Optional correct query labels; if provided, the correctness '
         'of returned results is checked')
     parser.add_argument(
-        '-b', '--batch-size', type=int, required=False, default=1000,
+        '-b', '--batch-size', type=int, required=False,
         help = 'Size of batches')
     args = parser.parse_args()
 
@@ -148,8 +148,6 @@ if __name__ == '__main__':
                 num_erroneous += 1
     print(f'Loading dataset ({n} vectors of length {d}) took', t2-t1)
     print(f'Performing {m} NN queries took', t8-t7)
-    # report the times it takes to transfer the dataset and queries from host to device
     print(f'Transferring dataset and queries from host to device took', t7-t6)
-    # report the time it takes to transfer the results from device to host
     print(f'Transferring results from device to host took', t9-t8)
     print(f'Number of erroneous queries: {num_erroneous}')
