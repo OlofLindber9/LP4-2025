@@ -14,21 +14,39 @@ def linear_scan(X, Q, b):
     Returns an m-vector of indices I; the value i reports the row in X such 
     that the Euclidean norm of ||X[I[i],:]-Q[i]|| is minimal
     """
-    # Loop over the batches of queries
+    
     m = Q.shape[0]
-    I = np.zeros(m, dtype=np.int32)
+    n = X.shape[0]
+    I = np.zeros(m, dtype=np.int32) 
+
+    X_norm_sq = np.sum(X ** 2, axis=1)  
+    
     for i in range(0, m, b):
-        # Get the current batch of queries
-        Q_batch = Q[i:i+b]
-        
-        # Compute the differences
-        D = Q_batch[:, np.newaxis, :] - X[np.newaxis, :, :]
-        
-        # Compute the squared Euclidean distances
-        D_sq = np.sum(D**2, axis=-1)
-        
-        # Find the indices of the minimum distances
+        i_end = min(i + b, m)
+        #Q_batch = Q[i:i+b]
+        Q_batch = Q[i:i_end] 
+
+        Q_norm_sq = np.sum(Q_batch ** 2, axis=1)
+        #D = Q_batch[:, cp.newaxis, :] - X[cp.newaxis, :, :]
+        D_sq = Q_norm_sq[:, None] + X_norm_sq[None, :] - 2 * Q_batch.dot(X.T)
+        #D_sq = cp.sum(D**2, axis=-1) 
+         
         I[i:i+b] = np.argmin(D_sq, axis=1)
+        
+        #argmin_result = cp.argmin(D_sq, axis=1)
+        argmin_result = np.argmin(D_sq, axis=1).astype(np.int32)
+
+        assert argmin_result.dtype == I.dtype
+        assert isinstance(argmin_result, np.ndarray)
+        assert isinstance(I, np.ndarray)
+        assert I[i:i_end].shape == argmin_result.shape, \
+        f"Shape mismatch: I[{i}:{i_end}].shape = {I[i:i_end].shape}, argmin shape = {argmin_result.shape}"
+
+        #print(f"Batch [{i}:{i_end}] - I slice shape: {I[i:i_end].shape}, argmin shape: {argmin_result.shape}")
+
+        I[i:i_end] = argmin_result
+
+
     return I.astype(np.int32)
 
 def load_glove(fn):
@@ -117,9 +135,11 @@ if __name__ == '__main__':
     if args.labels is not None:
         QL = load_query_labels(args.labels)
         assert len(QL) == m
+    
     t6 = time.time()
 
-    I = linear_scan(X,Q,args.batch_size)
+    I= linear_scan(X,Q,args.batch_size)
+
     t7 = time.time()
     assert I.shape == (m,)
 

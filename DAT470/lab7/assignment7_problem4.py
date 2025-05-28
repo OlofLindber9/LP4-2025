@@ -4,6 +4,7 @@ import pandas as pd
 import csv
 import sys
 import time
+import cupy as cp
 
 def linear_scan(X, Q, b):
     """
@@ -14,21 +15,39 @@ def linear_scan(X, Q, b):
     Returns an m-vector of indices I; the value i reports the row in X such 
     that the Euclidean norm of ||X[I[i],:]-Q[i]|| is minimal
     """
-    # Loop over the batches of queries
+    
     m = Q.shape[0]
-    I = np.zeros(m, dtype=np.int32)
+    n = X.shape[0]
+    I = cp.zeros(m, dtype=cp.int32) 
+
+    X_norm_sq = cp.sum(X ** 2, axis=1)  
+    
     for i in range(0, m, b):
-        # Get the current batch of queries
-        Q_batch = Q[i:i+b]
+        i_end = min(i + b, m)
+        #Q_batch = Q[i:i+b]
+        Q_batch = Q[i:i_end] 
+
+        Q_norm_sq = cp.sum(Q_batch ** 2, axis=1)
+        #D = Q_batch[:, cp.newaxis, :] - X[cp.newaxis, :, :]
+        D_sq = Q_norm_sq[:, None] + X_norm_sq[None, :] - 2 * Q_batch.dot(X.T)
+        #D_sq = cp.sum(D**2, axis=-1) 
+         
+        I[i:i+b] = cp.argmin(D_sq, axis=1)
         
-        # Compute the differences
-        D = Q_batch[:, np.newaxis, :] - X[np.newaxis, :, :]
-        
-        # Compute the squared Euclidean distances
-        D_sq = np.sum(D**2, axis=-1)
-        
-        # Find the indices of the minimum distances
-        I[i:i+b] = np.argmin(D_sq, axis=1)
+        #argmin_result = cp.argmin(D_sq, axis=1)
+        argmin_result = cp.argmin(D_sq, axis=1).astype(cp.int32)
+
+        assert argmin_result.dtype == I.dtype
+        assert isinstance(argmin_result, cp.ndarray)
+        assert isinstance(I, cp.ndarray)
+        assert I[i:i_end].shape == argmin_result.shape, \
+        f"Shape mismatch: I[{i}:{i_end}].shape = {I[i:i_end].shape}, argmin shape = {argmin_result.shape}"
+
+        #print(f"Batch [{i}:{i_end}] - I slice shape: {I[i:i_end].shape}, argmin shape: {argmin_result.shape}")
+
+        I[i:i_end] = argmin_result
+
+
     return I.astype(np.int32)
 
 def load_glove(fn):
@@ -117,9 +136,30 @@ if __name__ == '__main__':
     if args.labels is not None:
         QL = load_query_labels(args.labels)
         assert len(QL) == m
+    
+    
+    #dummy transfer
+    _ = cp.array(np.zeros(10, dtype=np.float32))
+    cp.cuda.Stream.null.synchronize()
     t6 = time.time()
 
-    I = linear_scan(X,Q,args.batch_size)
+    # Copy data from host (CPU) to device (GPU)
+    t_host_to_device_start = time.time()
+    X_gpu = cp.array(X, dtype=cp.float32) 
+    Q_gpu = cp.array(Q, dtype=cp.float32) 
+    cp.cuda.Stream.null.synchronize()
+    t_host_to_device_end = time.time()
+
+    I_gpu = linear_scan(X_gpu,Q_gpu,args.batch_size)
+    
+    # Synchronize GPU to ensure computation is done
+    cp.cuda.Stream.null.synchronize()
+
+    t_device_to_host_start = time.time()
+    I = cp.asnumpy(I_gpu)
+    cp.cuda.Stream.null.synchronize()
+    t_device_to_host_end = time.time()
+
     t7 = time.time()
     assert I.shape == (m,)
 
@@ -134,3 +174,6 @@ if __name__ == '__main__':
     print(f'Loading dataset ({n} vectors of length {d}) took', t2-t1)
     print(f'Performing {m} NN queries took', t7-t6)
     print(f'Number of erroneous queries: {num_erroneous}')
+    print(f'Transferring dataset and queries from host to device took {t_host_to_device_end - t_host_to_device_start:.4f} seconds')
+    print(f'Transferring results from device to host took {t_device_to_host_end - t_device_to_host_start:.4f} seconds')
+
