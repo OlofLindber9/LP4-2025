@@ -21,16 +21,9 @@ def linear_scan(X, Q, b):
     for i in range(0, m, b):
         end = min(i + b, m)
 
-        # Get the current batch of queries
         Q_batch = Q[i:end]        
-        
-        # Compute the differences
         D = Q_batch[:, cp.newaxis, :] - X[cp.newaxis, :, :]
-        
-        # Compute the Euclidean norm along the last axis of D
         D_norm = cp.linalg.norm(D, axis=-1)
-
-        # Find the indices of the minimum distances
         I[i:end] = cp.argmin(D_norm, axis=1)
 
     return I

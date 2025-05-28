@@ -117,8 +117,8 @@ if __name__ == '__main__':
     if QL is not None:
         for (i,j) in enumerate(I):
             if QL[i] != L[j]:
-                # sys.stderr.write(f'{i}th query was erroneous: got "{L[j]}", '
-                #                      f'but expected "{QL[i]}"\n')
+                sys.stderr.write(f'{i}th query was erroneous: got "{L[j]}", '
+                                     f'but expected "{QL[i]}"\n')
                 num_erroneous += 1
     print(f'Loading dataset ({n} vectors of length {d}) took', t2-t1)
     print(f'Performing {m} NN queries took', t8-t7)
